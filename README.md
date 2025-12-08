@@ -1,6 +1,6 @@
 # Shade
 
-Cross-platform shaders using Haxe programming language.
+Cross-platform shaders using the Haxe programming language.
 
 ```haxe
 import shade.*;

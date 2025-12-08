@@ -1,11 +1,13 @@
 {
   "name": "shade",
   "version": "0.1.0",
-  "description": "Cross-platform shaders using Haxe programming language",
+  "description": "Cross-platform shaders using the Haxe programming language",
   "url": "http://github.com/ceramic-engine/shade",
+  "license": "MIT",
   "tags": [],
   "dependencies": {
   },
   "classPath": "src/",
-  "releasenote": "Initial release."
+  "contributors": ["jeremyfa"],
+  "releasenote": "Initial draft with GLSL and HLSL/Unity exports"
 }
