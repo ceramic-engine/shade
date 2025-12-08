@@ -53,7 +53,7 @@ class Textured_Frag extends Frag {
 
 This project is primarily intended to be used with [Ceramic](https://ceramic-engine.com), but could work with other game engines too. It is very close to the GLSL spec, although it doesn't try to cover the entirety of it.
 
-`text/` directory includes sample shaders which are just copied from Ceramic.
+`test/` directory includes sample shaders which are just copied from Ceramic.
 
 The transpilation needs reflaxe. It is currently tested [on this commit](https://github.com/SomeRanDev/reflaxe/tree/5a91527c128d9ca7f34ae7a57b60da8746479663).
 
