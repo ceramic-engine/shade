@@ -1,0 +1,10 @@
+test/Test.hxml
+--class-path src
+--class-path test
+-D shade_glsl
+-D no-compilation
+--no-output
+
+--next
+
+-cmd haxe test/Test.hxml --cwd test -lib reflaxe -D reflaxe_measure --macro 'shade.compiler.CompilerInit.Start()' -p ../src -D shade_glsl

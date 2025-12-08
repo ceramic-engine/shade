@@ -1,0 +1,25 @@
+# -----------------------------------------------------------------------------------
+# Simple hxml file for testing your Reflaxe project.
+# Run this using the `test` command at the root of your project:
+#
+#    haxelib run reflaxe test
+#
+# If you wish to use a specific .html file, add it to the end of the command:
+#
+#    haxelib run reflaxe test path/to/file.hxml
+# -----------------------------------------------------------------------------------
+
+# Set output folder for ShadeCompiler
+-D shade_output=out
+
+# No DCE for this target
+--dce no
+
+# No analyzer optimisations
+-D analyzer-no-module
+
+# Retain meta (needed for the syntax)
+-D retain-untyped-meta
+
+# Main function
+-main Main

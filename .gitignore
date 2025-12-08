@@ -1,0 +1,4 @@
+_Build/
+/test/out
+/.haxelib
+.DS_Store
