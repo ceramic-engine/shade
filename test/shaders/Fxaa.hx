@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 class Fxaa extends Shader<Fxaa_Vert, Fxaa_Frag> {}
 
 class Fxaa_Vert extends Vert {

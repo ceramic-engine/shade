@@ -1,9 +1,9 @@
 package shade.compiler;
 
-#if (macro || shade_runtime)
+#if (macro || shade_compiler)
 
-import haxe.macro.Type;
 import haxe.macro.Expr;
+import haxe.macro.Type;
 import reflaxe.data.ClassVarData;
 
 using StringTools;

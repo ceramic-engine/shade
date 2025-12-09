@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 class Msdf extends Shader<Msdf_Vert, Msdf_Frag> {}
 
 class Msdf_Vert extends Vert {

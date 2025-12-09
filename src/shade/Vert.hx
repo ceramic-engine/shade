@@ -2,12 +2,12 @@ package shade;
 
 /**
  * Base class for vertex shaders.
- * Provides vertex-specific functions in addition to common functions from Shade.
  */
-extern class Vert extends Shade {
-    // Most shader functions are shared between vertex and fragment shaders,
-    // so they are defined in the parent Shade class.
+#if (!macro && shade_for_haxe)
+@:autoBuild(shade.macros.ShadeMacro.buildForHaxe())
+#end
+abstract class Vert extends Shade {
+
     //
-    // Vertex-specific built-in variables and outputs are handled
-    // by the rendering backend during shader compilation.
+
 }

@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 class InnerLight extends Shader<InnerLight_Vert, InnerLight_Frag> {}
 
 class InnerLight_Vert extends Vert {

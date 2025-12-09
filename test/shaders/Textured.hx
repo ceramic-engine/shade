@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 class Textured extends Shader<Textured_Vert, Textured_Frag> {}
 
 class Textured_Vert extends Vert {

@@ -1,6 +1,6 @@
 package shade.backend;
 
-#if (macro || shade_runtime)
+#if (macro || shade_compiler)
 
 import haxe.macro.Expr;
 import haxe.macro.Type;

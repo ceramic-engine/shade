@@ -1,6 +1,6 @@
 package shade.compiler;
 
-#if (macro || shade_runtime)
+#if (macro || shade_compiler)
 
 import reflaxe.ReflectCompiler;
 import reflaxe.preprocessors.ExpressionPreprocessor;

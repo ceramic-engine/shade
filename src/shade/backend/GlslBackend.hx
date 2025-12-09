@@ -1,6 +1,6 @@
 package shade.backend;
 
-#if (macro || shade_runtime)
+#if (macro || shade_compiler)
 
 import haxe.macro.Expr;
 import haxe.macro.Type;
@@ -381,6 +381,7 @@ class GlslBackend implements Backend {
     }
 
     function printExpression(printer:Printer, expr:TypedExpr, ctx:GlslContext):Void {
+
         switch expr.expr {
             case TConst(c):
                 switch c {
@@ -489,6 +490,30 @@ class GlslBackend implements Backend {
             case TCall(e, el):
                 switch e.expr {
                     case TField(ee, fa):
+
+                        // Detect shade Functions (helpers) calls
+                        switch ee.t {
+                            case TType(t, params):
+                                final defType = t.get();
+                                if (defType.module == 'shade.Functions') {
+                                    switch fa {
+                                        case FStatic(c, cf):
+                                            printer.write(cf.get().name);
+                                        case _:
+                                    }
+                                    printer.write('(');
+                                    for (i in 0...el.length) {
+                                        if (i > 0) {
+                                            printer.write(', ');
+                                        }
+                                        printExpression(printer, el[i], ctx);
+                                    }
+                                    printer.write(')');
+                                    return;
+                                }
+                            case _:
+                        }
+
                         switch fa {
                             case FStatic(c, cf):
                                 var resolvedField = null;

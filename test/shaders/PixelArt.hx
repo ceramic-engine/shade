@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 // Ported from: https://gist.github.com/Beefster09/7264303ee4b4b2086f372f1e70e8eddd
 
 class PixelArt extends Shader<PixelArt_Vert, PixelArt_Frag> {}

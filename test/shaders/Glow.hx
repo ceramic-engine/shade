@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 // Shader ported from: https://github.com/kiwipxl/GLSL-shaders/blob/5bcd7ae0d86a04c31a7a081f0c379aa973d3813d/glow.glsl
 
 class Glow extends Shader<Glow_Vert, Glow_Frag> {}

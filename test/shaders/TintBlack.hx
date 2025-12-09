@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 class TintBlack extends Shader<TintBlack_Vert, TintBlack_Frag> {}
 
 class TintBlack_Vert extends Vert {

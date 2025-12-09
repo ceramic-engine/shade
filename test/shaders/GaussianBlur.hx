@@ -1,7 +1,5 @@
 package shaders;
 
-import shade.*;
-
 // Shader ported from: https://github.com/Jam3/glsl-fast-gaussian-blur
 
 class GaussianBlur extends Shader<GaussianBlur_Vert, GaussianBlur_Frag> {}
