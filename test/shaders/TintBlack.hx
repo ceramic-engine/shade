@@ -4,8 +4,8 @@ class TintBlack extends Shader<TintBlack_Vert, TintBlack_Frag> {}
 
 class TintBlack_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -33,7 +33,7 @@ class TintBlack_Vert extends Vert {
 
 class TintBlack_Frag extends Frag {
 
-    @uniform @multi var tex:Sampler2D;
+    @param @multi var tex:Sampler2D;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

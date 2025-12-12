@@ -4,8 +4,8 @@ class InnerLight extends Shader<InnerLight_Vert, InnerLight_Frag> {}
 
 class InnerLight_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -27,9 +27,9 @@ class InnerLight_Vert extends Vert {
 
 class InnerLight_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var gap:Vec2;
-    @uniform var lightColor:Vec4;
+    @param var tex:Sampler2D;
+    @param var gap:Vec2;
+    @param var lightColor:Vec4;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

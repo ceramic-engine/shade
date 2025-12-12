@@ -6,8 +6,8 @@ class Glow extends Shader<Glow_Vert, Glow_Frag> {}
 
 class Glow_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -29,12 +29,12 @@ class Glow_Vert extends Vert {
 
 class Glow_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var resolution:Vec2;
-    @uniform var glowSize:Float;
-    @uniform var glowColor:Vec3;
-    @uniform var glowIntensity:Float;
-    @uniform var glowThreshold:Float;
+    @param var tex:Sampler2D;
+    @param var resolution:Vec2;
+    @param var glowSize:Float;
+    @param var glowColor:Vec3;
+    @param var glowIntensity:Float;
+    @param var glowThreshold:Float;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

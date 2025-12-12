@@ -6,8 +6,8 @@ class PixelArt extends Shader<PixelArt_Vert, PixelArt_Frag> {}
 
 class PixelArt_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -29,28 +29,28 @@ class PixelArt_Vert extends Vert {
 
 class PixelArt_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var resolution:Vec2;
-    @uniform var sharpness:Float;
+    @param var tex:Sampler2D;
+    @param var resolution:Vec2;
+    @param var sharpness:Float;
 
-    @uniform var gridThickness:Float;
-    @uniform var gridAlpha:Float;
-    @uniform var gridColor:Vec3;
+    @param var gridThickness:Float;
+    @param var gridAlpha:Float;
+    @param var gridColor:Vec3;
 
-    @uniform var scanlineIntensity:Float;
-    @uniform var scanlineOffset:Float;
-    @uniform var scanlineCount:Float;
-    @uniform var scanlineShape:Float;
+    @param var scanlineIntensity:Float;
+    @param var scanlineOffset:Float;
+    @param var scanlineCount:Float;
+    @param var scanlineShape:Float;
 
-    @uniform var verticalMaskIntensity:Float;
-    @uniform var verticalMaskOffset:Float;
-    @uniform var verticalMaskCount:Float;
+    @param var verticalMaskIntensity:Float;
+    @param var verticalMaskOffset:Float;
+    @param var verticalMaskCount:Float;
 
-    @uniform var glowThresholdMin:Float;
-    @uniform var glowThresholdMax:Float;
-    @uniform var glowStrength:Float;
+    @param var glowThresholdMin:Float;
+    @param var glowThresholdMax:Float;
+    @param var glowStrength:Float;
 
-    @uniform var chromaticAberration:Float;
+    @param var chromaticAberration:Float;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

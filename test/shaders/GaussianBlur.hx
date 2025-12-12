@@ -6,8 +6,8 @@ class GaussianBlur extends Shader<GaussianBlur_Vert, GaussianBlur_Frag> {}
 
 class GaussianBlur_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -29,9 +29,9 @@ class GaussianBlur_Vert extends Vert {
 
 class GaussianBlur_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var resolution:Vec2;
-    @uniform var blurSize:Vec2;
+    @param var tex:Sampler2D;
+    @param var resolution:Vec2;
+    @param var blurSize:Vec2;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

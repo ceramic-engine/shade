@@ -4,8 +4,8 @@ class Fxaa extends Shader<Fxaa_Vert, Fxaa_Frag> {}
 
 class Fxaa_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -27,8 +27,8 @@ class Fxaa_Vert extends Vert {
 
 class Fxaa_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var resolution:Vec2;
+    @param var tex:Sampler2D;
+    @param var resolution:Vec2;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

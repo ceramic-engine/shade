@@ -1,6 +1,10 @@
 package shade;
 
+#if (!macro && shade_for_haxe)
+abstract IVec2(Any) {}
+#else
 extern class IVec2 {}
+#end
 
 abstract Vec2(IVec2) {
     public function new(x:Float = 0, y:Float = 0) {

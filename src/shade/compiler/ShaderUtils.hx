@@ -108,11 +108,39 @@ class ShaderUtils {
     public static function isMatrixType(type:Type):Bool {
         return switch type {
             case TInst(t, params):
-                final name = t.get().name.toLowerCase();
-                name.startsWith('mat');
+                final name = t.get().name;
+                name == 'Mat2' || name == 'Mat3' || name == 'Mat4';
             case TAbstract(t, params):
-                final name = t.get().name.toLowerCase();
-                name.startsWith('mat');
+                final name = t.get().name;
+                name == 'Mat2' || name == 'Mat3' || name == 'Mat4';
+            case _:
+                false;
+        }
+    }
+
+    /**
+     * Check if a type is Mat2.
+     */
+    public static function isMat2Type(type:Type):Bool {
+        return switch type {
+            case TInst(t, params):
+                t.get().name == 'Mat2';
+            case TAbstract(t, params):
+                t.get().name == 'Mat2';
+            case _:
+                false;
+        }
+    }
+
+    /**
+     * Check if a type is Mat3.
+     */
+    public static function isMat3Type(type:Type):Bool {
+        return switch type {
+            case TInst(t, params):
+                t.get().name == 'Mat3';
+            case TAbstract(t, params):
+                t.get().name == 'Mat3';
             case _:
                 false;
         }

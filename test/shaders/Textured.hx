@@ -4,8 +4,8 @@ class Textured extends Shader<Textured_Vert, Textured_Frag> {}
 
 class Textured_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -31,7 +31,7 @@ class Textured_Vert extends Vert {
 
 class Textured_Frag extends Frag {
 
-    @uniform @multi var tex:Sampler2D;
+    @param @multi var tex:Sampler2D;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

@@ -19,7 +19,7 @@ interface Backend {
      * Generate shader output for a class.
      * Backend has full control over what files to generate and their content.
      * @param classType The shader class being compiled
-     * @param varFields Class variables with metadata (@uniform, @in, @out, @multi)
+     * @param varFields Class variables with metadata (@param, @in, @out, @multi)
      * @param funcFields Class functions including main()
      * @param setExtraFile Callback to output files
      */

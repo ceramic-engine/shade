@@ -4,8 +4,8 @@ class Msdf extends Shader<Msdf_Vert, Msdf_Frag> {}
 
 class Msdf_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -27,9 +27,9 @@ class Msdf_Vert extends Vert {
 
 class Msdf_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var texSize:Vec2;
-    @uniform var pxRange:Float;
+    @param var tex:Sampler2D;
+    @param var texSize:Vec2;
+    @param var pxRange:Float;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

@@ -71,7 +71,7 @@ class GlslBackend implements Backend {
         var numUniforms = 0;
         for (varField in varFields) {
             final field = varField.field;
-            if (field.meta.has('uniform')) {
+            if (field.meta.has('param')) {
                 numUniforms++;
                 printer.write("uniform ");
                 printer.write(compileGlslType(field.type));
@@ -125,7 +125,7 @@ class GlslBackend implements Backend {
         var numGlobals = 0;
         for (varField in varFields) {
             final field = varField.field;
-            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('uniform')) {
+            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('param')) {
                 numGlobals++;
                 printer.write(compileGlslType(field.type));
                 printer.write(" ");
@@ -220,7 +220,7 @@ class GlslBackend implements Backend {
                 if (field.meta.has('multi')) {
                     if (field.meta.has('in')) {
                         ctx.multiSlotField = field.name;
-                    } else if (field.meta.has('uniform')) {
+                    } else if (field.meta.has('param')) {
                         ctx.multiTextureField = field.name;
                     }
                 }
@@ -243,7 +243,7 @@ class GlslBackend implements Backend {
         var numUniforms = 0;
         for (varField in varFields) {
             final field = varField.field;
-            if (field.meta.has('uniform')) {
+            if (field.meta.has('param')) {
                 numUniforms++;
                 if (field.meta.has('multi')) {
                     if (ctx.multi > 0) {
@@ -251,7 +251,15 @@ class GlslBackend implements Backend {
                             printer.write("uniform ");
                             printer.write(compileGlslType(field.type));
                             printer.write(" ");
-                            printer.write(field.name + '_' + i);
+                            if (field.name == "mainTex") {
+                                if (i == 0) {
+                                    printer.write("mainTex");
+                                } else {
+                                    printer.write("tex" + i);
+                                }
+                            } else {
+                                printer.write(field.name + '_' + i);
+                            }
                             printer.write(";");
                             printer.line();
                         }
@@ -302,7 +310,7 @@ class GlslBackend implements Backend {
         var numGlobals = 0;
         for (varField in varFields) {
             final field = varField.field;
-            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('uniform')) {
+            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('param')) {
                 numGlobals++;
                 printer.write(compileGlslType(field.type));
                 printer.write(" ");
@@ -470,7 +478,15 @@ class GlslBackend implements Backend {
                     case FInstance(c, params, cf):
                         final name = cf.get().name;
                         if (ctx.multiTextureField == name) {
-                            printer.write(name + '_' + ctx.multiCurrentSlot);
+                            if (name == "mainTex") {
+                                if (ctx.multiCurrentSlot == 0) {
+                                    printer.write("mainTex");
+                                } else {
+                                    printer.write("tex" + ctx.multiCurrentSlot);
+                                }
+                            } else {
+                                printer.write(name + '_' + ctx.multiCurrentSlot);
+                            }
                         } else {
                             printer.write(name);
                         }

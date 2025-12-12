@@ -141,10 +141,10 @@ class UnityBackend implements Backend {
             }
         }
 
-        // Find the main texture field (first @uniform Sampler2D) and multi-texture fields
+        // Find the main texture field (first @param Sampler2D) and multi-texture fields
         for (varField in fragData.varFields) {
             final field = varField.field;
-            if (field.meta.has('uniform') && ShaderUtils.isSampler2DType(field.type)) {
+            if (field.meta.has('param') && ShaderUtils.isSampler2DType(field.type)) {
                 // In non-multi mode, the first Sampler2D (even with @multi) is the main texture
                 // In multi mode, the first Sampler2D without @multi is the main texture
                 if (ctx.mainTextureField == null) {
@@ -230,7 +230,7 @@ class UnityBackend implements Backend {
         printer.line();
 
         // Uniforms (samplers and other uniforms for fragment)
-        writeFragmentUniforms(printer, fragData, multi);
+        writeFragmentUniforms(printer, fragData, ctx);
         printer.line();
 
         // Fragment helper functions (prefixed with frag_)
@@ -324,12 +324,17 @@ class UnityBackend implements Backend {
         printer.writeln('_StencilComp ("Stencil Comp", Float) = 8');
 
         // Custom uniforms from fragment shader (excluding Sampler2D types which are handled above)
+        // Note: mat2/mat3 are not declared in Properties block - they use float arrays declared in CGPROGRAM
         for (varField in fragData.varFields) {
             final field = varField.field;
-            if (field.meta.has('uniform') && !field.meta.has('multi') && !ShaderUtils.isSampler2DType(field.type)) {
+            if (field.meta.has('param') && !field.meta.has('multi') && !ShaderUtils.isSampler2DType(field.type)) {
+                // Skip mat2/mat3 - they can't be in Properties block (arrays not supported)
+                if (ShaderUtils.isMat2Type(field.type) || ShaderUtils.isMat3Type(field.type)) {
+                    continue;
+                }
                 final propType = getUnityPropertyType(field.type);
                 if (propType != null) {
-                    printer.writeln('${field.name} ("${field.name}", $propType) = ${getUnityPropertyDefault(field.type)}');
+                    printer.writeln('${field.name}_ ("${field.name}", $propType) = ${getUnityPropertyDefault(field.type)}');
                 }
             }
         }
@@ -365,7 +370,7 @@ class UnityBackend implements Backend {
 
                 // Use float4 for position (to accommodate .w for textureId in multi mode)
                 final actualType = if (name == ctx.inPosition) 'float4' else hlslType;
-                printer.writeln('$actualType $name : $semantic;');
+                printer.writeln('$actualType ${name}_ : $semantic;');
             }
         }
 
@@ -407,7 +412,7 @@ class UnityBackend implements Backend {
                     texcoordIndex++;
                 }
 
-                printer.writeln('$hlslType $name : $semantic;');
+                printer.writeln('$hlslType ${name}_ : $semantic;');
             }
         }
 
@@ -433,7 +438,7 @@ class UnityBackend implements Backend {
         printer.indent();
 
         printer.writeln('v2f OUT;');
-        printer.writeln('OUT.position = UnityObjectToClipPos(IN.${ctx.inPosition}.xyz);');
+        printer.writeln('OUT.position = UnityObjectToClipPos(IN.${ctx.inPosition}_.xyz);');
 
         // Build a set of @out field names and @in field names for mapping
         final outFields = new Map<String, Bool>();
@@ -542,17 +547,17 @@ class UnityBackend implements Backend {
                                 final name = cf.get().name;
                                 // Check if this is the @in @multi field (maps to IN.{position}.w)
                                 if (name == ctx.vertexInputMultiField) {
-                                    printer.write('IN.${ctx.inPosition}.w');
+                                    printer.write('IN.${ctx.inPosition}_.w');
                                 }
                                 // Check if it's an @in field
                                 else if (inFields.exists(name)) {
-                                    printer.write('IN.$name');
+                                    printer.write('IN.${name}_');
                                 }
                                 // Check if it's an @out field
                                 else if (outFields.exists(name)) {
-                                    printer.write('OUT.$name');
+                                    printer.write('OUT.${name}_');
                                 } else {
-                                    printer.write(name);
+                                    printer.write('${name}_');
                                 }
                             case _:
                         }
@@ -582,17 +587,17 @@ class UnityBackend implements Backend {
         }
     }
 
-    function writeFragmentUniforms(printer:Printer, fragData:ShaderClassData, multi:Int):Void {
+    function writeFragmentUniforms(printer:Printer, fragData:ShaderClassData, ctx:UnityContext):Void {
         // All uniforms from fragment shader
         for (varField in fragData.varFields) {
             final field = varField.field;
-            if (field.meta.has('uniform')) {
+            if (field.meta.has('param')) {
                 if (ShaderUtils.isSampler2DType(field.type)) {
                     // Sampler2D uniform
-                    if (field.meta.has('multi') && multi > 0) {
+                    if (field.meta.has('multi') && ctx.multi > 0) {
                         // Multi-texture: output multiple samplers with suffixes
                         printer.writeln('sampler2D _MainTex;');
-                        for (i in 1...multi) {
+                        for (i in 1...ctx.multi) {
                             printer.writeln('sampler2D _Tex$i;');
                         }
                     } else {
@@ -600,8 +605,17 @@ class UnityBackend implements Backend {
                         printer.writeln('sampler2D _MainTex;');
                     }
                 } else if (!field.meta.has('multi')) {
-                    // Other uniform types
-                    printer.writeln('${compileHlslType(field.type)} ${field.name};');
+                    // Check for mat2/mat3 types - declare as float arrays
+                    if (ShaderUtils.isMat2Type(field.type)) {
+                        printer.writeln('float ${field.name}_arr_[4];');
+                        ctx.mat2Uniforms.push(field.name);
+                    } else if (ShaderUtils.isMat3Type(field.type)) {
+                        printer.writeln('float ${field.name}_arr_[9];');
+                        ctx.mat3Uniforms.push(field.name);
+                    } else {
+                        // Other uniform types
+                        printer.writeln('${compileHlslType(field.type)} ${field.name}_;');
+                    }
                 }
             }
         }
@@ -611,6 +625,25 @@ class UnityBackend implements Backend {
         printer.writeln('fixed4 frag(v2f IN) : SV_Target');
         printer.writeln('{');
         printer.indent();
+
+        // Generate mat2/mat3 reconstruction from float arrays
+        for (name in ctx.mat2Uniforms) {
+            printer.writeln('float2x2 ${name}_ = float2x2(');
+            printer.indent();
+            printer.writeln('${name}_arr_[0], ${name}_arr_[2],');
+            printer.writeln('${name}_arr_[1], ${name}_arr_[3]');
+            printer.unindent();
+            printer.writeln(');');
+        }
+        for (name in ctx.mat3Uniforms) {
+            printer.writeln('float3x3 ${name}_ = float3x3(');
+            printer.indent();
+            printer.writeln('${name}_arr_[0], ${name}_arr_[3], ${name}_arr_[6],');
+            printer.writeln('${name}_arr_[1], ${name}_arr_[4], ${name}_arr_[7],');
+            printer.writeln('${name}_arr_[2], ${name}_arr_[5], ${name}_arr_[8]');
+            printer.unindent();
+            printer.writeln(');');
+        }
 
         // Find and compile main function
         for (funcField in fragData.funcFields) {
@@ -721,11 +754,11 @@ class UnityBackend implements Backend {
                                 final name = cf.get().name;
                                 final fieldMeta = cf.get().meta;
                                 final isIn = fieldMeta.has('in');
-                                final isUniform = fieldMeta.has('uniform');
+                                final isUniform = fieldMeta.has('param');
 
                                 // Map fragment inputs (@in fields)
                                 if (isIn) {
-                                    printer.write('IN.$name');
+                                    printer.write('IN.${name}_');
                                 } else if (isUniform) {
                                     // Handle uniform fields - check if this is a Sampler2D type
                                     final fieldType = cf.get().type;
@@ -741,13 +774,13 @@ class UnityBackend implements Backend {
                                             printer.write('_MainTex');
                                         } else {
                                             // Other texture samplers (not main texture)
-                                            printer.write('_$name');
+                                            printer.write('${name}_');
                                         }
                                     } else {
-                                        printer.write(name);
+                                        printer.write('${name}_');
                                     }
                                 } else {
-                                    printer.write(name);
+                                    printer.write('${name}_');
                                 }
                             case _:
                         }
@@ -995,7 +1028,7 @@ class UnityBackend implements Backend {
                                 if (i > 0) {
                                     printer.write('else ');
                                 }
-                                printer.write('if (IN.${ctx.multiSlotField} == ${i}.0) ');
+                                printer.write('if (IN.${ctx.multiSlotField}_ == ${i}.0) ');
                                 printer.writeln('{');
                                 printer.indent();
                                 ctx.multiCurrentSlot = i;
@@ -1312,6 +1345,9 @@ class UnityContext {
     public var outMultiSlot:String = null;
     // Helper function name mapping (original name -> prefixed name)
     public var helperFunctions:Map<String, String> = new Map();
+    // Mat2/mat3 uniform field names (for reconstruction in main())
+    public var mat2Uniforms:Array<String> = [];
+    public var mat3Uniforms:Array<String> = [];
 }
 
 #end

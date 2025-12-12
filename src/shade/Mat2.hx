@@ -1,6 +1,10 @@
 package shade;
 
+#if (!macro && shade_for_haxe)
+abstract IMat2(Any) {}
+#else
 extern class IMat2 {}
+#end
 
 abstract Mat2(IMat2) {
     // Column-major storage

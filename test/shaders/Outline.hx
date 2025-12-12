@@ -6,8 +6,8 @@ class Outline extends Shader<Outline_Vert, Outline_Frag> {}
 
 class Outline_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -29,11 +29,11 @@ class Outline_Vert extends Vert {
 
 class Outline_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var resolution:Vec2;
-    @uniform var outlineThickness:Float;
-    @uniform var outlineColor:Vec3;
-    @uniform var outlineThreshold:Float;
+    @param var tex:Sampler2D;
+    @param var resolution:Vec2;
+    @param var outlineThickness:Float;
+    @param var outlineColor:Vec3;
+    @param var outlineThreshold:Float;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;

@@ -6,8 +6,8 @@ class Bloom extends Shader<Bloom_Vert, Bloom_Frag> {}
 
 class Bloom_Vert extends Vert {
 
-    @uniform var projectionMatrix:Mat4;
-    @uniform var modelViewMatrix:Mat4;
+    @param var projectionMatrix:Mat4;
+    @param var modelViewMatrix:Mat4;
 
     @in var vertexPosition:Vec3;
     @in var vertexTCoord:Vec2;
@@ -29,11 +29,11 @@ class Bloom_Vert extends Vert {
 
 class Bloom_Frag extends Frag {
 
-    @uniform var tex:Sampler2D;
-    @uniform var resolution:Vec2;
-    @uniform var bloomSpread:Float;
-    @uniform var bloomIntensity:Float;
-    @uniform var bloomThreshold:Float;
+    @param var tex:Sampler2D;
+    @param var resolution:Vec2;
+    @param var bloomSpread:Float;
+    @param var bloomIntensity:Float;
+    @param var bloomThreshold:Float;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;
