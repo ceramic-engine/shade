@@ -17,6 +17,46 @@ class ShadeMacro {
 
     @:persistent static var shaderVertexAttributesByType:Map<String,Array<ShadeMacroVertexAttribute>> = null;
 
+    /**
+     * Collects all shader class references.
+     */
+    static var shaderReferences:Array<{
+        pack: Array<String>,
+        name: String,
+        filePath: String,
+        hash: String
+    }> = [];
+
+    /**
+     * Registers a post-generation hook to output.
+     * This requires external setup to work correctly (Ceramic or similar).
+     */
+    public static function initRegister():Void {
+
+        var isCompletion = Context.defined('completion');
+        if (!isCompletion) {
+            Context.onAfterGenerate(function() {
+                var targetPath = DefinesMacro.jsonDefinedValue('target_path');
+                if (targetPath != null) {
+                    shaderReferences.sort(function(a, b) {
+                        if (a.filePath < b.filePath) return -1;
+                        if (a.filePath > b.filePath) return 1;
+                        if (a.hash < b.hash) return -1;
+                        if (a.hash > b.hash) return 1;
+                        return 0;
+                    });
+                    if (!sys.FileSystem.exists(haxe.io.Path.join([targetPath, 'shade']))) {
+                        sys.FileSystem.createDirectory(haxe.io.Path.join([targetPath, 'shade']));
+                    }
+                    sys.io.File.saveContent(haxe.io.Path.join([targetPath, 'shade', 'info.json']), haxe.Json.stringify({
+                        shaders: shaderReferences
+                    }));
+                }
+            });
+        }
+
+    }
+
     static function getOrCreateShaderParam(list:Array<ShadeMacroParam>, name:String):ShadeMacroParam {
         for (i in 0...list.length) {
             if (list[i].name == name) return list[i];
