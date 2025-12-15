@@ -1,13 +1,16 @@
 package shade.macros;
 
 import haxe.DynamicAccess;
+import haxe.io.Path;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.Type;
 
 typedef ShadeMacroParam = { name: String, type: shade.ParamType, ?def: ExprDef, ?doc: String, ?texSlot: Int, ?pos: Position };
 
-typedef ShadeMacroVertexAttribute = { name: String, index: Int, type: shade.ParamType, ?doc: String, ?pos: Position };
+typedef ShadeMacroVertexAttribute = { name: String, index: Int, type: shade.ParamType, ?doc: String, ?pos: Position, ?multi: Bool };
+
+typedef ShadeMacroShaderReference = { pack: Array<String>, name: String, filePath: String, hash: String };
 
 class ShadeMacro {
 
@@ -20,24 +23,37 @@ class ShadeMacro {
     /**
      * Collects all shader class references.
      */
-    static var shaderReferences:Array<{
-        pack: Array<String>,
-        name: String,
-        filePath: String,
-        hash: String
-    }> = [];
+    @:persistent static var shaderReferences:Array<ShadeMacroShaderReference> = [];
+
+    /**
+     * Cache of file content hashes to avoid redundant file reads.
+     */
+    static var fileHashes:Map<String,String> = new Map();
+
+    /**
+     * Computes or retrieves cached MD5 hash of a file's content.
+     * @param filePath Path to the file to hash
+     * @return MD5 hash string
+     */
+    static function getHash(filePath:String):String {
+        var hash = fileHashes.get(filePath);
+        if (hash == null) {
+            hash = haxe.crypto.Md5.encode(sys.io.File.getContent(filePath));
+            fileHashes.set(filePath, hash);
+        }
+        return hash;
+    }
 
     /**
      * Registers a post-generation hook to output.
      * This requires external setup to work correctly (Ceramic or similar).
      */
-    public static function initRegister():Void {
+    public static function initRegister(targetPath:String):Void {
 
         var isCompletion = Context.defined('completion');
         if (!isCompletion) {
-            Context.onAfterGenerate(function() {
-                var targetPath = DefinesMacro.jsonDefinedValue('target_path');
-                if (targetPath != null) {
+            if (targetPath != null) {
+                Context.onAfterGenerate(function() {
                     shaderReferences.sort(function(a, b) {
                         if (a.filePath < b.filePath) return -1;
                         if (a.filePath > b.filePath) return 1;
@@ -51,10 +67,33 @@ class ShadeMacro {
                     sys.io.File.saveContent(haxe.io.Path.join([targetPath, 'shade', 'info.json']), haxe.Json.stringify({
                         shaders: shaderReferences
                     }));
-                }
-            });
+                });
+            }
         }
 
+    }
+
+    static function registerShaderReference(ref:ShadeMacroShaderReference) {
+        for (existing in shaderReferences) {
+            if (existing.name == ref.name && arraysEqual(existing.pack, ref.pack)) {
+                if (existing.hash != ref.hash) {
+                    existing.filePath = ref.filePath;
+                    existing.hash = ref.hash;
+                }
+                return;
+            }
+        }
+        shaderReferences.push(ref);
+    }
+
+    static function arraysEqual(a:Array<String>, b:Array<String>):Bool {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        if (a.length != b.length) return false;
+        for (i in 0...a.length) {
+            if (a[i] != b[i]) return false;
+        }
+        return true;
     }
 
     static function getOrCreateShaderParam(list:Array<ShadeMacroParam>, name:String):ShadeMacroParam {
@@ -192,21 +231,29 @@ class ShadeMacro {
         var constructorExpr = new StringBuf();
         constructorExpr.addChar('{'.code);
         constructorExpr.addChar('\n'.code);
+        var textureIdAttribute = null;
         if (vertAttributesData.length > 3) {
-            constructorExpr.add('super(backendItem, [');
+            constructorExpr.add('super([');
             // Custom attributes
+            var numItems = 0;
             for (i in 0...vertAttributesData.length) {
                 if (i >= 3) {
-                    if (i > 3) {
+                    if (numItems > 0) {
                         constructorExpr.addChar(','.code);
                     }
-                    constructorExpr.add('{ size: ${sizeFromType(vertAttributesData[i].type)}, name: "${vertAttributesData[i].name}" }\n');
+                    if (vertAttributesData[i].name == 'vertexTextureId' && vertAttributesData[i].multi != null && vertAttributesData[i].multi == true) {
+                        textureIdAttribute = vertAttributesData[i];
+                    }
+                    else {
+                        numItems++;
+                        constructorExpr.add('{ size: ${sizeFromType(vertAttributesData[i].type)}, name: "${vertAttributesData[i].name}" }\n');
+                    }
                 }
             }
             constructorExpr.add('],[');
         }
         else {
-            constructorExpr.add('super(backendItem, null, [');
+            constructorExpr.add('super(null, [');
         }
         // Base attributes
         for (i in 0...vertAttributesData.length) {
@@ -217,7 +264,14 @@ class ShadeMacro {
                 constructorExpr.add('{ size: ${sizeFromType(vertAttributesData[i].type)}, name: "${vertAttributesData[i].name}" }\n');
             }
         }
-        constructorExpr.add(']);');
+        constructorExpr.add(']');
+        if (textureIdAttribute != null) {
+            constructorExpr.add(',{ size: ${sizeFromType(textureIdAttribute.type)}, name: "${textureIdAttribute.name}" }');
+        }
+        else {
+            constructorExpr.add(',null');
+        }
+        constructorExpr.add(');');
         constructorExpr.addChar('\n'.code);
         constructorExpr.addChar('}'.code);
         fields.push({
@@ -225,10 +279,7 @@ class ShadeMacro {
             pos: currentPos,
             access: [APublic],
             kind: FFun({
-                args: [{
-                    name: 'backendItem',
-                    type: macro :backend.Shader
-                }],
+                args: [],
                 expr: Context.parse(constructorExpr.toString(), currentPos)
             })
         });
@@ -248,13 +299,37 @@ class ShadeMacro {
             #end
             ),
             fields: fields,
-            meta: []
+            meta: [{
+                name: ':autoBuild',
+                params: [ macro shade.macros.ShadeMacro.buildShaderClassField()],
+                pos: currentPos
+            }]
         });
 
         return TPath({
             pack: ['shade'],
             name: fullName
         });
+
+    }
+
+    static function buildShaderClassField():Array<Field> {
+
+        var fields = Context.getBuildFields();
+        var localClass = Context.getLocalClass().get();
+        var superClass = localClass.superClass.t.get();
+        var currentPos = Context.currentPos();
+
+        // Register file
+        final filePath = Path.join([Sys.getCwd(), Context.getPosInfos(currentPos).file]);
+        registerShaderReference({
+            pack: localClass.pack,
+            name: localClass.name,
+            filePath: filePath,
+            hash: getHash(filePath)
+        });
+
+        return fields;
 
     }
 
@@ -748,6 +823,12 @@ class ShadeMacro {
                                 result.index = nextAttributeIndex;
                                 nextAttributeIndex++;
                                 result.pos = field.pos;
+                                for (subMeta in field.meta) {
+                                    if (subMeta.name == 'multi') {
+                                        result.multi = true;
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
