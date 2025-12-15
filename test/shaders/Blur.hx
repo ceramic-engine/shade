@@ -29,7 +29,7 @@ class Blur_Vert extends Vert {
 
 class Blur_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var resolution:Vec2;
     @param var blurSize:Vec2;
 
@@ -38,7 +38,7 @@ class Blur_Frag extends Frag {
 
     function main():Vec4 {
 
-        var pixel:Vec4 = texture(tex, tcoord);
+        var pixel:Vec4 = texture(mainTex, tcoord);
 
         var uvX:Float = tcoord.x;
         var uvY:Float = tcoord.y;
@@ -48,15 +48,15 @@ class Blur_Frag extends Frag {
         while (n < 9) {
             uvY = tcoord.y + (blurSize.y * (float(n) - 4.0)) / resolution.y;
             var hSum:Vec4 = vec4(0.0, 0.0, 0.0, 0.0);
-            hSum += texture(tex, vec2(uvX - (4.0 * blurSize.x) / resolution.x, uvY));
-            hSum += texture(tex, vec2(uvX - (3.0 * blurSize.x) / resolution.x, uvY));
-            hSum += texture(tex, vec2(uvX - (2.0 * blurSize.x) / resolution.x, uvY));
-            hSum += texture(tex, vec2(uvX - blurSize.x / resolution.x, uvY));
-            hSum += texture(tex, vec2(uvX, uvY));
-            hSum += texture(tex, vec2(uvX + blurSize.x / resolution.x, uvY));
-            hSum += texture(tex, vec2(uvX + (2.0 * blurSize.x) / resolution.x, uvY));
-            hSum += texture(tex, vec2(uvX + (3.0 * blurSize.x) / resolution.x, uvY));
-            hSum += texture(tex, vec2(uvX + (4.0 * blurSize.x) / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX - (4.0 * blurSize.x) / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX - (3.0 * blurSize.x) / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX - (2.0 * blurSize.x) / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX - blurSize.x / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX, uvY));
+            hSum += texture(mainTex, vec2(uvX + blurSize.x / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX + (2.0 * blurSize.x) / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX + (3.0 * blurSize.x) / resolution.x, uvY));
+            hSum += texture(mainTex, vec2(uvX + (4.0 * blurSize.x) / resolution.x, uvY));
             sum += hSum / 9.0;
             n++;
         }

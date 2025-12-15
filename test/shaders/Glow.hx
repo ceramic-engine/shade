@@ -29,11 +29,15 @@ class Glow_Vert extends Vert {
 
 class Glow_Frag extends Frag {
 
-    @param var tex:Sampler2D;
-    @param var resolution:Vec2;
-    @param var glowSize:Float;
+    @param var mainTex:Sampler2D;
+    @param var resolution:Vec2 = vec2(0, 0);
+    @param var glowSize:Float = 1234;
+
+    /**
+     * The color of the glow?
+     */
     @param var glowColor:Vec3;
-    @param var glowIntensity:Float;
+    @param var glowIntensity:Float = 345.6;
     @param var glowThreshold:Float;
 
     @in var tcoord:Vec2;
@@ -41,7 +45,7 @@ class Glow_Frag extends Frag {
 
     function main():Vec4 {
 
-        var pixel:Vec4 = texture(tex, tcoord);
+        var pixel:Vec4 = texture(mainTex, tcoord);
 
         if (pixel.a <= glowThreshold) {
 
@@ -53,15 +57,15 @@ class Glow_Frag extends Frag {
             while (n < 9) {
                 uvY = tcoord.y + (glowSize * (float(n) - 4.0)) / resolution.y;
                 var hSum:Float = 0.0;
-                hSum += texture(tex, vec2(uvX - (4.0 * glowSize) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX - (3.0 * glowSize) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX - (2.0 * glowSize) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX - glowSize / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX, uvY)).a;
-                hSum += texture(tex, vec2(uvX + glowSize / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX + (2.0 * glowSize) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX + (3.0 * glowSize) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX + (4.0 * glowSize) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - (4.0 * glowSize) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - (3.0 * glowSize) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - (2.0 * glowSize) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - glowSize / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + glowSize / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + (2.0 * glowSize) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + (3.0 * glowSize) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + (4.0 * glowSize) / resolution.x, uvY)).a;
                 sum += hSum / 9.0;
                 n++;
             }

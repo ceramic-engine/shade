@@ -258,7 +258,7 @@ class UnityBackend implements Backend {
         helperPrinter.setIndent(3);
 
         if (ctx.needsShadeTextureHelper) {
-            helperPrinter.line('// Unity texture sampling with Y-flip for GLSL-style compatibility');
+            helperPrinter.line('// Unity texture sampling with Y-flip for coordinate system compatibility');
             helperPrinter.writeln('float4 shade_texture(sampler2D tex, float2 uv) {');
             helperPrinter.indent();
             helperPrinter.writeln('return tex2D(tex, float2(uv.x, 1.0 - uv.y));');
@@ -324,12 +324,12 @@ class UnityBackend implements Backend {
         printer.writeln('_StencilComp ("Stencil Comp", Float) = 8');
 
         // Custom uniforms from fragment shader (excluding Sampler2D types which are handled above)
-        // Note: mat2/mat3 are not declared in Properties block - they use float arrays declared in CGPROGRAM
+        // Note: Matrices are not declared in Properties block - they are passed via SetMatrix/SetFloatArray
         for (varField in fragData.varFields) {
             final field = varField.field;
             if (field.meta.has('param') && !field.meta.has('multi') && !ShaderUtils.isSampler2DType(field.type)) {
-                // Skip mat2/mat3 - they can't be in Properties block (arrays not supported)
-                if (ShaderUtils.isMat2Type(field.type) || ShaderUtils.isMat3Type(field.type)) {
+                // Skip matrix types - they can't be in Properties block
+                if (ShaderUtils.isMatrixType(field.type)) {
                     continue;
                 }
                 final propType = getUnityPropertyType(field.type);
@@ -534,7 +534,7 @@ class UnityBackend implements Backend {
                     case _:
                 }
             case TLocal(v):
-                printer.write(v.name);
+                printer.write('${v.name}_');
             case TBinop(op, e1, e2):
                 printVertexExpression(printer, e1, ctx, inFields, outFields);
                 printer.write(getBinopString(op));
@@ -707,7 +707,7 @@ class UnityBackend implements Backend {
                         if (i > 0) printer.write(', ');
                         printer.write(compileHlslType(args[i].t));
                         printer.write(' ');
-                        printer.write(args[i].name);
+                        printer.write('${args[i].name}_');
                     }
                     printer.write(') ');
 
@@ -739,7 +739,7 @@ class UnityBackend implements Backend {
                     case TSuper:
                 }
             case TLocal(v):
-                printer.write(v.name);
+                printer.write('${v.name}_');
             case TArray(e1, e2):
             case TBinop(op, e1, e2):
                 printExpression(printer, e1, ctx);
@@ -965,7 +965,7 @@ class UnityBackend implements Backend {
             case TVar(v, expr):
                 printer.write(compileHlslType(v.t));
                 printer.write(' ');
-                printer.write(v.name);
+                printer.write('${v.name}_');
                 if (expr != null) {
                     printer.write(' = ');
                     printExpression(printer, expr, ctx);
@@ -1295,6 +1295,7 @@ class UnityBackend implements Backend {
                 final name = t.get().name.toLowerCase();
                 switch name {
                     case 'float' | 'int': 'Float';
+                    case 'vec2' | 'vec3' | 'vec4': 'Vector';
                     case _: 'Float';
                 }
             case _: 'Float';
@@ -1308,6 +1309,12 @@ class UnityBackend implements Backend {
                 switch name {
                     case 'vec2' | 'vec3' | 'vec4': '(0,0,0,0)';
                     case 'sampler2d': '"white" {}';
+                    case _: '0';
+                }
+            case TAbstract(t, params):
+                final name = t.get().name.toLowerCase();
+                switch name {
+                    case 'vec2' | 'vec3' | 'vec4': '(0,0,0,0)';
                     case _: '0';
                 }
             case _: '0';

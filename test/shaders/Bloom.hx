@@ -29,7 +29,7 @@ class Bloom_Vert extends Vert {
 
 class Bloom_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var resolution:Vec2;
     @param var bloomSpread:Float;
     @param var bloomIntensity:Float;
@@ -40,7 +40,7 @@ class Bloom_Frag extends Frag {
 
     function main():Vec4 {
 
-        var pixel:Vec4 = texture(tex, tcoord);
+        var pixel:Vec4 = texture(mainTex, tcoord);
 
         if (pixel.a <= bloomThreshold) {
 
@@ -52,15 +52,15 @@ class Bloom_Frag extends Frag {
             while (n < 9) {
                 uvY = tcoord.y + (bloomSpread * (float(n) - 4.0)) / resolution.y;
                 var hSum:Vec4 = vec4(0.0, 0.0, 0.0, 0.0);
-                hSum += texture(tex, vec2(uvX - (4.0 * bloomSpread) / resolution.x, uvY));
-                hSum += texture(tex, vec2(uvX - (3.0 * bloomSpread) / resolution.x, uvY));
-                hSum += texture(tex, vec2(uvX - (2.0 * bloomSpread) / resolution.x, uvY));
-                hSum += texture(tex, vec2(uvX - bloomSpread / resolution.x, uvY));
-                hSum += texture(tex, vec2(uvX, uvY));
-                hSum += texture(tex, vec2(uvX + bloomSpread / resolution.x, uvY));
-                hSum += texture(tex, vec2(uvX + (2.0 * bloomSpread) / resolution.x, uvY));
-                hSum += texture(tex, vec2(uvX + (3.0 * bloomSpread) / resolution.x, uvY));
-                hSum += texture(tex, vec2(uvX + (4.0 * bloomSpread) / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX - (4.0 * bloomSpread) / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX - (3.0 * bloomSpread) / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX - (2.0 * bloomSpread) / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX - bloomSpread / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX, uvY));
+                hSum += texture(mainTex, vec2(uvX + bloomSpread / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX + (2.0 * bloomSpread) / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX + (3.0 * bloomSpread) / resolution.x, uvY));
+                hSum += texture(mainTex, vec2(uvX + (4.0 * bloomSpread) / resolution.x, uvY));
                 sum += hSum / 9.0;
                 n++;
             }

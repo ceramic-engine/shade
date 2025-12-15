@@ -27,7 +27,7 @@ class Msdf_Vert extends Vert {
 
 class Msdf_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var texSize:Vec2;
     @param var pxRange:Float;
 
@@ -46,7 +46,7 @@ class Msdf_Frag extends Frag {
         var textureSample:Vec3;
 
         msdfUnit = vec2(pxRange) / texSize;
-        textureSample = texture(tex, tcoord).rgb;
+        textureSample = texture(mainTex, tcoord).rgb;
 
         var sigDist:Float = median(textureSample.r, textureSample.g, textureSample.b) - 0.5;
         sigDist *= dot(msdfUnit, vec2(0.5) / fwidth(tcoord));

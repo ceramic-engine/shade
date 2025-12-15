@@ -27,7 +27,7 @@ class Fxaa_Vert extends Vert {
 
 class Fxaa_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var resolution:Vec2;
 
     @in var tcoord:Vec2;
@@ -49,11 +49,11 @@ class Fxaa_Frag extends Frag {
     function fxaa(fragCoord:Vec2):Vec4 {
 
         var inverseVP:Vec2 = vec2(1.0 / resolution.x, 1.0 / resolution.y);
-        var rgbNW:Vec3 = texture(tex, v_rgbNW).xyz;
-        var rgbNE:Vec3 = texture(tex, v_rgbNE).xyz;
-        var rgbSW:Vec3 = texture(tex, v_rgbSW).xyz;
-        var rgbSE:Vec3 = texture(tex, v_rgbSE).xyz;
-        var texColor:Vec4 = texture(tex, v_rgbM);
+        var rgbNW:Vec3 = texture(mainTex, v_rgbNW).xyz;
+        var rgbNE:Vec3 = texture(mainTex, v_rgbNE).xyz;
+        var rgbSW:Vec3 = texture(mainTex, v_rgbSW).xyz;
+        var rgbSE:Vec3 = texture(mainTex, v_rgbSE).xyz;
+        var texColor:Vec4 = texture(mainTex, v_rgbM);
         var rgbM:Vec3 = texColor.xyz;
         var luma:Vec3 = vec3(0.299, 0.587, 0.114);
         var lumaNW:Float = dot(rgbNW, luma);
@@ -78,11 +78,11 @@ class Fxaa_Frag extends Frag {
                   dir * rcpDirMin)) * inverseVP;
 
         var rgbA:Vec3 = 0.5 * (
-            texture(tex, fragCoord * inverseVP + dir * (1.0 / 3.0 - 0.5)).xyz +
-            texture(tex, fragCoord * inverseVP + dir * (2.0 / 3.0 - 0.5)).xyz);
+            texture(mainTex, fragCoord * inverseVP + dir * (1.0 / 3.0 - 0.5)).xyz +
+            texture(mainTex, fragCoord * inverseVP + dir * (2.0 / 3.0 - 0.5)).xyz);
         var rgbB:Vec3 = rgbA * 0.5 + 0.25 * (
-            texture(tex, fragCoord * inverseVP + dir * -0.5).xyz +
-            texture(tex, fragCoord * inverseVP + dir * 0.5).xyz);
+            texture(mainTex, fragCoord * inverseVP + dir * -0.5).xyz +
+            texture(mainTex, fragCoord * inverseVP + dir * 0.5).xyz);
 
         var lumaB:Float = dot(rgbB, luma);
         if ((lumaB < lumaMin) || (lumaB > lumaMax)) {

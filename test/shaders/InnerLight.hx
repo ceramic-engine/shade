@@ -27,7 +27,7 @@ class InnerLight_Vert extends Vert {
 
 class InnerLight_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var gap:Vec2;
     @param var lightColor:Vec4;
 
@@ -36,8 +36,8 @@ class InnerLight_Frag extends Frag {
 
     function main():Vec4 {
 
-        var pixel:Vec4 = texture(tex, tcoord);
-        var outsidePixel:Vec4 = texture(tex, vec2(tcoord.x + gap.x, tcoord.y + gap.y));
+        var pixel:Vec4 = texture(mainTex, tcoord);
+        var outsidePixel:Vec4 = texture(mainTex, vec2(tcoord.x + gap.x, tcoord.y + gap.y));
 
         pixel *= color;
 

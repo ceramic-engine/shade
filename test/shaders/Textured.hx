@@ -31,7 +31,7 @@ class Textured_Vert extends Vert {
 
 class Textured_Frag extends Frag {
 
-    @param @multi var tex:Sampler2D;
+    @param @multi var mainTex:Sampler2D;
 
     @in var tcoord:Vec2;
     @in var color:Vec4;
@@ -42,7 +42,7 @@ class Textured_Frag extends Frag {
         var texColor = vec4(0.0);
 
         @multi {
-            texColor = texture(tex, tcoord);
+            texColor = texture(mainTex, tcoord);
         }
 
         return color * texColor;

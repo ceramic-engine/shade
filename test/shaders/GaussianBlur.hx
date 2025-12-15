@@ -29,7 +29,7 @@ class GaussianBlur_Vert extends Vert {
 
 class GaussianBlur_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var resolution:Vec2;
     @param var blurSize:Vec2;
 
@@ -44,7 +44,7 @@ class GaussianBlur_Frag extends Frag {
 
         var radius:Vec2 = blurSize / resolution.xy;
 
-        var pixel:Vec4 = texture(tex, tcoord);
+        var pixel:Vec4 = texture(mainTex, tcoord);
 
         var d:Float = 0.0;
         while (d < PI2) {
@@ -53,7 +53,7 @@ class GaussianBlur_Frag extends Frag {
 
             var i:Float = 1.0 / QUALITY;
             while (i <= 1.0) {
-                pixel += texture(tex, tcoord + dir * i);
+                pixel += texture(mainTex, tcoord + dir * i);
                 i += 1.0 / QUALITY;
             }
 

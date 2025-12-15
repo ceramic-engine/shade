@@ -29,7 +29,7 @@ class Outline_Vert extends Vert {
 
 class Outline_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var resolution:Vec2;
     @param var outlineThickness:Float;
     @param var outlineColor:Vec3;
@@ -40,7 +40,7 @@ class Outline_Frag extends Frag {
 
     function main():Vec4 {
 
-        var pixel:Vec4 = texture(tex, tcoord);
+        var pixel:Vec4 = texture(mainTex, tcoord);
         var thickness:Float = outlineThickness * 0.25;
 
         if (pixel.a <= outlineThreshold) {
@@ -53,15 +53,15 @@ class Outline_Frag extends Frag {
             while (n < 9) {
                 uvY = tcoord.y + (thickness * (float(n) - 4.0)) / resolution.y;
                 var hSum:Float = 0.0;
-                hSum += texture(tex, vec2(uvX - (4.0 * thickness) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX - (3.0 * thickness) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX - (2.0 * thickness) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX - thickness / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX, uvY)).a;
-                hSum += texture(tex, vec2(uvX + thickness / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX + (2.0 * thickness) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX + (3.0 * thickness) / resolution.x, uvY)).a;
-                hSum += texture(tex, vec2(uvX + (4.0 * thickness) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - (4.0 * thickness) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - (3.0 * thickness) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - (2.0 * thickness) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX - thickness / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + thickness / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + (2.0 * thickness) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + (3.0 * thickness) / resolution.x, uvY)).a;
+                hSum += texture(mainTex, vec2(uvX + (4.0 * thickness) / resolution.x, uvY)).a;
                 sum += hSum / 9.0;
                 n++;
             }

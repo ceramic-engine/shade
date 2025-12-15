@@ -29,7 +29,7 @@ class PixelArt_Vert extends Vert {
 
 class PixelArt_Frag extends Frag {
 
-    @param var tex:Sampler2D;
+    @param var mainTex:Sampler2D;
     @param var resolution:Vec2;
     @param var sharpness:Float;
 
@@ -65,7 +65,7 @@ class PixelArt_Frag extends Frag {
 
     function sampleSharpened(coord:Vec2):Vec4 {
 
-        return texture(tex, vec2(
+        return texture(mainTex, vec2(
             sharpen(coord.x * resolution.x) / resolution.x,
             sharpen(coord.y * resolution.y) / resolution.y
         ));
@@ -140,10 +140,10 @@ class PixelArt_Frag extends Frag {
             var glowFactor:Float = smoothstep(glowThresholdMin, glowThresholdMax, lum);
             if (glowFactor > 0.0) {
                 var texel:Vec2 = vec2(1.0) / resolution;
-                var blur:Vec3 = texture(tex, tcoord + vec2(texel.x, 0.0)).rgb;
-                blur += texture(tex, tcoord - vec2(texel.x, 0.0)).rgb;
-                blur += texture(tex, tcoord + vec2(0.0, texel.y)).rgb;
-                blur += texture(tex, tcoord - vec2(0.0, texel.y)).rgb;
+                var blur:Vec3 = texture(mainTex, tcoord + vec2(texel.x, 0.0)).rgb;
+                blur += texture(mainTex, tcoord - vec2(texel.x, 0.0)).rgb;
+                blur += texture(mainTex, tcoord + vec2(0.0, texel.y)).rgb;
+                blur += texture(mainTex, tcoord - vec2(0.0, texel.y)).rgb;
                 blur += texColor.rgb;
                 blur /= 5.0;
                 texColor.rgb = mix(texColor.rgb, blur, glowFactor * glowStrength);
