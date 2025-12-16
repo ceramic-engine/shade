@@ -10,7 +10,7 @@ typedef ShadeMacroParam = { name: String, type: shade.ParamType, ?def: ExprDef, 
 
 typedef ShadeMacroVertexAttribute = { name: String, index: Int, type: shade.ParamType, ?doc: String, ?pos: Position, ?multi: Bool };
 
-typedef ShadeMacroShaderReference = { pack: Array<String>, name: String, filePath: String, hash: String };
+typedef ShadeMacroShaderReference = { pack: Array<String>, name: String, filePath: String, hash: String, multi: Bool };
 
 class ShadeMacro {
 
@@ -301,7 +301,7 @@ class ShadeMacro {
             fields: fields,
             meta: [{
                 name: ':autoBuild',
-                params: [ macro shade.macros.ShadeMacro.buildShaderClassField()],
+                params: [ macro shade.macros.ShadeMacro.buildShaderClassFields()],
                 pos: currentPos
             }]
         });
@@ -313,23 +313,61 @@ class ShadeMacro {
 
     }
 
-    static function buildShaderClassField():Array<Field> {
+    macro static function buildShaderClassFields():Array<Field> {
 
         var fields = Context.getBuildFields();
         var localClass = Context.getLocalClass().get();
         var superClass = localClass.superClass.t.get();
         var currentPos = Context.currentPos();
 
+        var multi = false;
+
+        // Checking vertex shader is enough, to know if multi texture is supported
+        var nameParts = superClass.name.split('__');
+        final vertKey = typePathFromUnderscoredType(nameParts[1]);
+        final attributes =  shaderVertexAttributesByType.get(vertKey);
+        if (attributes != null) {
+            for (attr in attributes) {
+                if (attr.multi == true) {
+                    multi = true;
+                    break;
+                }
+            }
+        }
+
         // Register file
-        final filePath = Path.join([Sys.getCwd(), Context.getPosInfos(currentPos).file]);
+        var filePath = Context.getPosInfos(currentPos).file;
+        if (!Path.isAbsolute(filePath)) {
+            filePath = Path.join([Sys.getCwd(), filePath]);
+        }
         registerShaderReference({
             pack: localClass.pack,
             name: localClass.name,
             filePath: filePath,
-            hash: getHash(filePath)
+            hash: getHash(filePath),
+            multi: false
         });
 
         return fields;
+
+    }
+
+    static function typePathFromUnderscoredType(underscoredType:String):String {
+
+        var keyParts = underscoredType.split('_');
+        var isPack = true;
+        var keyBuf = new StringBuf();
+        for (i in 0...keyParts.length) {
+            if (i > 0) {
+                keyBuf.addChar(isPack ? '.'.code : '_'.code);
+            }
+            final part = keyParts[i];
+            if (isPack) {
+                isPack = (part.toLowerCase() == part);
+            }
+            keyBuf.add(part);
+        }
+        return keyBuf.toString();
 
     }
 

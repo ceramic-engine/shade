@@ -33,7 +33,7 @@ class GlslBackend implements Backend {
         if (parent == null) return;
         if (parent.pack == null || parent.pack.length != 1 || parent.pack[0] != 'shade') return;
 
-        final shaderName = ShaderUtils.getBaseName(classType.name);
+        final shaderName = ShaderUtils.getQualifiedBaseName(classType.pack, classType.name);
 
         switch parent.name {
             case 'Vert':

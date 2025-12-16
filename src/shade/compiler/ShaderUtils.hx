@@ -30,6 +30,19 @@ class ShaderUtils {
     }
 
     /**
+     * Get the qualified base shader name including package path.
+     * Enables multiple shaders with the same class name in different packages.
+     * Example: package ['shaders', 'effects'] + class 'Blur_Vert' → 'shaders_effects_blur'
+     */
+    public static function getQualifiedBaseName(pack:Array<String>, className:String):String {
+        final baseName = getBaseName(className);
+        if (pack == null || pack.length == 0) {
+            return baseName;
+        }
+        return pack.join('_') + '_' + baseName;
+    }
+
+    /**
      * Check if a class name represents a vertex shader.
      */
     public static function isVertexShader(className:String):Bool {
