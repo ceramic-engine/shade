@@ -164,10 +164,59 @@ class ShadeMacro {
         }
 
         final fields:Array<Field> = [];
-        final paramInfo = new Map<String, ShadeMacroParam>();
 
-        var vertClassKey = (vertType.pack != null && vertType.pack.length > 0 ? vertType.pack.join('.') + '.' : '') + vertType.name;
-        var fragClassKey = (fragType.pack != null && fragType.pack.length > 0 ? fragType.pack.join('.') + '.' : '') + fragType.name;
+        Context.defineType({
+            pack: ['shade'],
+            name: fullName,
+            pos: currentPos,
+            kind: TDClass(
+            #if shade_base_shader
+            {
+                pack: ['shade'],
+                name: 'BaseShader',
+                params: []
+            }
+            #end
+            ),
+            fields: fields,
+            meta: [{
+                name: ':autoBuild',
+                params: [ macro shade.macros.ShadeMacro.buildShaderClassFields()],
+                pos: currentPos
+            }]
+        });
+
+        return TPath({
+            pack: ['shade'],
+            name: fullName
+        });
+
+    }
+
+    macro static function buildShaderClassFields():Array<Field> {
+
+        var fields = Context.getBuildFields();
+        var localClass = Context.getLocalClass().get();
+        var superClass = localClass.superClass.t.get();
+        var currentPos = Context.currentPos();
+
+        var multi = false;
+
+        // Resolve vert class and frag class keys from parent type name
+        var nameParts = superClass.name.split('__');
+        final vertClassKey = typePathFromUnderscoredType(nameParts[1]);
+        final fragClassKey = typePathFromUnderscoredType(nameParts[2]);
+        final attributes =  shaderVertexAttributesByType.get(vertClassKey);
+        if (attributes != null) {
+            for (attr in attributes) {
+                if (attr.multi == true) {
+                    multi = true;
+                    break;
+                }
+            }
+        }
+
+        final paramInfo = new Map<String, ShadeMacroParam>();
 
         var vertParamsData = shaderParamsByType.get(vertClassKey);
         var fragParamsData = shaderParamsByType.get(fragClassKey);
@@ -284,56 +333,6 @@ class ShadeMacro {
             })
         });
         #end
-
-        Context.defineType({
-            pack: ['shade'],
-            name: fullName,
-            pos: currentPos,
-            kind: TDClass(
-            #if shade_base_shader
-            {
-                pack: ['shade'],
-                name: 'BaseShader',
-                params: []
-            }
-            #end
-            ),
-            fields: fields,
-            meta: [{
-                name: ':autoBuild',
-                params: [ macro shade.macros.ShadeMacro.buildShaderClassFields()],
-                pos: currentPos
-            }]
-        });
-
-        return TPath({
-            pack: ['shade'],
-            name: fullName
-        });
-
-    }
-
-    macro static function buildShaderClassFields():Array<Field> {
-
-        var fields = Context.getBuildFields();
-        var localClass = Context.getLocalClass().get();
-        var superClass = localClass.superClass.t.get();
-        var currentPos = Context.currentPos();
-
-        var multi = false;
-
-        // Checking vertex shader is enough, to know if multi texture is supported
-        var nameParts = superClass.name.split('__');
-        final vertKey = typePathFromUnderscoredType(nameParts[1]);
-        final attributes =  shaderVertexAttributesByType.get(vertKey);
-        if (attributes != null) {
-            for (attr in attributes) {
-                if (attr.multi == true) {
-                    multi = true;
-                    break;
-                }
-            }
-        }
 
         // Register file
         var filePath = Context.getPosInfos(currentPos).file;
