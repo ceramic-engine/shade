@@ -9,9 +9,6 @@
 #    haxelib run reflaxe test path/to/file.hxml
 # -----------------------------------------------------------------------------------
 
-# Set output folder for ShadeCompiler
--D shade_output=out
-
 # No DCE for this target
 --dce no
 

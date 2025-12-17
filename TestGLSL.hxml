@@ -3,8 +3,9 @@ test/Test.hxml
 --class-path test
 -D shade_glsl
 -D no-compilation
+-D shade_output=out-glsl
 --no-output
 
 --next
 
--cmd haxe test/Test.hxml --cwd test -lib reflaxe -D reflaxe_measure --macro 'shade.compiler.CompilerInit.Start()' -p ../src -D shade_glsl
+-cmd haxe test/Test.hxml --cwd test -lib reflaxe -D reflaxe_measure -D shade_output=out-glsl --macro 'shade.compiler.CompilerInit.Start()' -p ../src -D shade_glsl

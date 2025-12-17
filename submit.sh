@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Rebuild run.n (CLI bytecode)
+echo "Building run.n..."
+haxe -main Run -neko run.n
+if [ $? -ne 0 ]; then
+    echo "Error building run.n"
+    exit 1
+fi
+
 # Target zip file
 ZIP_NAME="shade.zip"
 

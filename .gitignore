@@ -1,4 +1,6 @@
 _Build/
 /test/out
+/test/out-glsl
+/test/out-unity
 /.haxelib
 .DS_Store
