@@ -167,7 +167,7 @@ class UnityBackend implements Backend {
         printer.indent();
 
         // Properties block
-        writePropertiesBlock(printer, vertData, fragData, multi);
+        writePropertiesBlock(printer, vertData, fragData, multi, ctx.mainTextureField);
 
         // SubShader block
         printer.writeln('SubShader');
@@ -301,7 +301,7 @@ class UnityBackend implements Backend {
         return result;
     }
 
-    function writePropertiesBlock(printer:Printer, vertData:ShaderClassData, fragData:ShaderClassData, multi:Int):Void {
+    function writePropertiesBlock(printer:Printer, vertData:ShaderClassData, fragData:ShaderClassData, multi:Int, mainTextureFieldName:String):Void {
         printer.writeln('Properties');
         printer.writeln('{');
         printer.indent();
@@ -314,6 +314,16 @@ class UnityBackend implements Backend {
             }
         } else {
             printer.writeln('[PerRendererData] _MainTex ("Main Texture", 2D) = "white" {}');
+        }
+
+        // Additional texture properties (non-main textures, non-multi)
+        for (varField in fragData.varFields) {
+            final field = varField.field;
+            if (field.meta.has('param') && ShaderUtils.isSampler2DType(field.type) && !field.meta.has('multi')) {
+                if (field.name != mainTextureFieldName) {
+                    printer.writeln('[PerRendererData] ${field.name}_ ("${field.name}", 2D) = "white" {}');
+                }
+            }
         }
 
         // Standard blend properties
@@ -600,9 +610,12 @@ class UnityBackend implements Backend {
                         for (i in 1...ctx.multi) {
                             printer.writeln('sampler2D _Tex$i;');
                         }
-                    } else {
-                        // Single texture
+                    } else if (field.name == ctx.mainTextureField) {
+                        // Main texture
                         printer.writeln('sampler2D _MainTex;');
+                    } else {
+                        // Other texture samplers
+                        printer.writeln('sampler2D ${field.name}_;');
                     }
                 } else if (!field.meta.has('multi')) {
                     // Check for mat2/mat3 types - declare as float arrays
