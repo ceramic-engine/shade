@@ -60,7 +60,7 @@ class GlslBackend implements Backend {
         // Resolve context
         final ctx:GlslContext = {
             multi: multi,
-            multiShader: VERT
+            shaderKind: VERT
         };
 
         // Header
@@ -144,6 +144,7 @@ class GlslBackend implements Backend {
             if (field.name == 'main') {
                 printer.writeln("void main(void) {");
                 printer.indent();
+                ctx.inMain = true;
                 switch funcField.expr.expr {
                     case TBlock(el):
                         for (expr in el) {
@@ -172,6 +173,7 @@ class GlslBackend implements Backend {
                         }
                     case _:
                 }
+                ctx.inMain = false;
                 printer.writeln('gl_PointSize = 1.0;');
                 printer.unindent();
                 printer.writeln("}");
@@ -212,7 +214,7 @@ class GlslBackend implements Backend {
         // Resolve context
         final ctx:GlslContext = {
             multi: multi,
-            multiShader: FRAG
+            shaderKind: FRAG
         };
         if (multi > 0) {
             for (varField in varFields) {
@@ -329,6 +331,7 @@ class GlslBackend implements Backend {
             if (field.name == 'main') {
                 printer.writeln("void main(void) {");
                 printer.indent();
+                ctx.inMain = true;
                 switch funcField.expr.expr {
                     case TBlock(el):
                         for (expr in el) {
@@ -357,6 +360,7 @@ class GlslBackend implements Backend {
                         }
                     case _:
                 }
+                ctx.inMain = false;
                 printer.unindent();
                 printer.endBlock('}');
                 printer.line();
@@ -661,15 +665,24 @@ class GlslBackend implements Backend {
             case TSwitch(e, cases, edef):
             case TTry(e, catches):
             case TReturn(e):
-                printer.write('return ');
-                printExpression(printer, e, ctx);
+                if (ctx.inMain) {
+                    if (ctx.shaderKind == VERT) {
+                        printer.write('gl_Position = ');
+                    } else {
+                        printer.write('fragColor = ');
+                    }
+                    printExpression(printer, e, ctx);
+                } else {
+                    printer.write('return ');
+                    printExpression(printer, e, ctx);
+                }
             case TBreak:
             case TContinue:
             case TThrow(e):
             case TCast(e, m):
             case TMeta(m, e1):
                 if (m.name == 'multi') {
-                    if (ctx.multiShader == FRAG && ctx.multi > 0) {
+                    if (ctx.shaderKind == FRAG && ctx.multi > 0) {
                         if (ctx.multiSlotField != null) {
                             for (i in 0...ctx.multi) {
                                 if (i > 0) {
@@ -700,7 +713,7 @@ class GlslBackend implements Backend {
                                 printer.line();
                             }
                         }
-                    } else if (ctx.multiShader == FRAG || (ctx.multiShader == VERT && ctx.multi > 0)) {
+                    } else if (ctx.shaderKind == FRAG || (ctx.shaderKind == VERT && ctx.multi > 0)) {
                         printExpression(printer, e1, ctx);
                     }
                 } else {
@@ -850,7 +863,8 @@ class GlslBackend implements Backend {
 @:structInit
 class GlslContext {
     public var multi:Int;
-    public var multiShader:ShaderKind;
+    public var shaderKind:ShaderKind;
+    public var inMain:Bool = false;
     public var multiSlotField:String = null;
     public var multiTextureField:String = null;
     public var multiCurrentSlot:Int = -1;
