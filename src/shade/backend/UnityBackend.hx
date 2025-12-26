@@ -546,9 +546,29 @@ class UnityBackend implements Backend {
             case TLocal(v):
                 printer.write('${v.name}_');
             case TBinop(op, e1, e2):
-                printVertexExpression(printer, e1, ctx, inFields, outFields);
-                printer.write(getBinopString(op));
-                printVertexExpression(printer, e2, ctx, inFields, outFields);
+                switch op {
+                    case OpMod:
+                        // Transform % to shade_mod() function call
+                        ctx.needsShadeModHelper = true;
+                        printer.write('shade_mod(');
+                        printVertexExpression(printer, e1, ctx, inFields, outFields);
+                        printer.write(', ');
+                        printVertexExpression(printer, e2, ctx, inFields, outFields);
+                        printer.write(')');
+                    case OpAssignOp(OpMod):
+                        // Transform x %= y to x = shade_mod(x, y)
+                        ctx.needsShadeModHelper = true;
+                        printVertexExpression(printer, e1, ctx, inFields, outFields);
+                        printer.write(' = shade_mod(');
+                        printVertexExpression(printer, e1, ctx, inFields, outFields);
+                        printer.write(', ');
+                        printVertexExpression(printer, e2, ctx, inFields, outFields);
+                        printer.write(')');
+                    case _:
+                        printVertexExpression(printer, e1, ctx, inFields, outFields);
+                        printer.write(getBinopString(op));
+                        printVertexExpression(printer, e2, ctx, inFields, outFields);
+                }
             case TField(e, fa):
                 switch e.expr {
                     case TConst(TThis):
@@ -755,9 +775,29 @@ class UnityBackend implements Backend {
                 printer.write('${v.name}_');
             case TArray(e1, e2):
             case TBinop(op, e1, e2):
-                printExpression(printer, e1, ctx);
-                printer.write(getBinopString(op));
-                printExpression(printer, e2, ctx);
+                switch op {
+                    case OpMod:
+                        // Transform % to shade_mod() function call
+                        ctx.needsShadeModHelper = true;
+                        printer.write('shade_mod(');
+                        printExpression(printer, e1, ctx);
+                        printer.write(', ');
+                        printExpression(printer, e2, ctx);
+                        printer.write(')');
+                    case OpAssignOp(OpMod):
+                        // Transform x %= y to x = shade_mod(x, y)
+                        ctx.needsShadeModHelper = true;
+                        printExpression(printer, e1, ctx);
+                        printer.write(' = shade_mod(');
+                        printExpression(printer, e1, ctx);
+                        printer.write(', ');
+                        printExpression(printer, e2, ctx);
+                        printer.write(')');
+                    case _:
+                        printExpression(printer, e1, ctx);
+                        printer.write(getBinopString(op));
+                        printExpression(printer, e2, ctx);
+                }
             case TField(e, fa):
                 switch e.expr {
                     case TConst(TThis):
@@ -1030,7 +1070,9 @@ class UnityBackend implements Backend {
                 printer.write('return ');
                 printExpression(printer, e, ctx);
             case TBreak:
+                printer.write('break');
             case TContinue:
+                printer.write('continue');
             case TThrow(e):
             case TCast(e, m):
             case TMeta(m, e1):

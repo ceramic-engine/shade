@@ -420,57 +420,71 @@ class GlslBackend implements Backend {
                 printer.write(v.name);
             case TArray(e1, e2):
             case TBinop(op, e1, e2):
-                printExpression(printer, e1, ctx);
                 switch op {
-                    case OpAdd:
-                        printer.write(' + ');
-                    case OpMult:
-                        printer.write(' * ');
-                    case OpDiv:
-                        printer.write(' / ');
-                    case OpSub:
-                        printer.write(' - ');
-                    case OpAssign:
-                        printer.write(' = ');
-                    case OpEq:
-                        printer.write(' == ');
-                    case OpNotEq:
-                        printer.write(' != ');
-                    case OpGt:
-                        printer.write(' > ');
-                    case OpGte:
-                        printer.write(' >= ');
-                    case OpLt:
-                        printer.write(' < ');
-                    case OpLte:
-                        printer.write(' <= ');
-                    case OpAnd:
-                        printer.write(' & ');
-                    case OpOr:
-                        printer.write(' | ');
-                    case OpBoolAnd:
-                        printer.write(' && ');
-                    case OpBoolOr:
-                        printer.write(' || ');
                     case OpMod:
-                        printer.write(' % ');
-                    case OpAssignOp(subOp):
-                        switch subOp {
+                        // Transform % to mod() function call
+                        printer.write('mod(');
+                        printExpression(printer, e1, ctx);
+                        printer.write(', ');
+                        printExpression(printer, e2, ctx);
+                        printer.write(')');
+                    case OpAssignOp(OpMod):
+                        // Transform x %= y to x = mod(x, y)
+                        printExpression(printer, e1, ctx);
+                        printer.write(' = mod(');
+                        printExpression(printer, e1, ctx);
+                        printer.write(', ');
+                        printExpression(printer, e2, ctx);
+                        printer.write(')');
+                    case _:
+                        printExpression(printer, e1, ctx);
+                        switch op {
                             case OpAdd:
-                                printer.write(' += ');
+                                printer.write(' + ');
                             case OpMult:
-                                printer.write(' *= ');
+                                printer.write(' * ');
                             case OpDiv:
-                                printer.write(' /= ');
+                                printer.write(' / ');
                             case OpSub:
-                                printer.write(' -= ');
-                            case OpMod:
-                                printer.write(' %= ');
-                            case _:
+                                printer.write(' - ');
+                            case OpAssign:
+                                printer.write(' = ');
+                            case OpEq:
+                                printer.write(' == ');
+                            case OpNotEq:
+                                printer.write(' != ');
+                            case OpGt:
+                                printer.write(' > ');
+                            case OpGte:
+                                printer.write(' >= ');
+                            case OpLt:
+                                printer.write(' < ');
+                            case OpLte:
+                                printer.write(' <= ');
+                            case OpAnd:
+                                printer.write(' & ');
+                            case OpOr:
+                                printer.write(' | ');
+                            case OpBoolAnd:
+                                printer.write(' && ');
+                            case OpBoolOr:
+                                printer.write(' || ');
+                            case OpAssignOp(subOp):
+                                switch subOp {
+                                    case OpAdd:
+                                        printer.write(' += ');
+                                    case OpMult:
+                                        printer.write(' *= ');
+                                    case OpDiv:
+                                        printer.write(' /= ');
+                                    case OpSub:
+                                        printer.write(' -= ');
+                                    case _:
+                                }
+                            case OpXor | OpShl | OpShr | OpUShr | OpInterval | OpArrow | OpIn | OpNullCoal | OpMod:
                         }
-                    case OpXor | OpShl | OpShr | OpUShr | OpInterval | OpArrow | OpIn | OpNullCoal:
+                        printExpression(printer, e2, ctx);
                 }
-                printExpression(printer, e2, ctx);
             case TField(e, fa):
                 switch e.expr {
                     case TConst(TThis):
@@ -677,7 +691,9 @@ class GlslBackend implements Backend {
                     printExpression(printer, e, ctx);
                 }
             case TBreak:
+                printer.write('break');
             case TContinue:
+                printer.write('continue');
             case TThrow(e):
             case TCast(e, m):
             case TMeta(m, e1):
