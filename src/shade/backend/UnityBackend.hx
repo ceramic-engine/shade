@@ -76,12 +76,18 @@ class UnityBackend implements Backend {
         fragData:ShaderClassData,
         setExtraFile:(filename:OutputPath, content:String) -> Void
     ):Void {
-        // Generate base shader
-        setExtraFile(baseName + '.shader', compileUnityShader(baseName, vertData, fragData, 0));
+        final is3d = vertData.classType.meta.has(':shade3d') || fragData.classType.meta.has(':shade3d');
 
-        // Check if multi-texture variant needed
-        if (ShaderUtils.hasMultiAnnotation(vertData.varFields) || ShaderUtils.hasMultiAnnotation(fragData.varFields)) {
-            setExtraFile(baseName + '_mt8.shader', compileUnityShader(baseName + '_mt8', vertData, fragData, 8));
+        // Variant suffix (`_inst` for the instanced transpile) applies to both
+        // the output file name and the internal ShaderLab name.
+        final suffixed = baseName + ShaderUtils.getOutputSuffix();
+
+        // Generate base shader
+        setExtraFile(suffixed + '.shader', compileUnityShader(suffixed, vertData, fragData, 0));
+
+        // Check if multi-texture variant needed (2D shaders only)
+        if (!is3d && (ShaderUtils.hasMultiAnnotation(vertData.varFields) || ShaderUtils.hasMultiAnnotation(fragData.varFields))) {
+            setExtraFile(suffixed + '_mt8.shader', compileUnityShader(suffixed + '_mt8', vertData, fragData, 8));
         }
     }
 
@@ -93,6 +99,38 @@ class UnityBackend implements Backend {
             multi: multi,
             multiShader: FRAG
         };
+
+        ctx.is3d = vertData.classType.meta.has(':shade3d') || fragData.classType.meta.has(':shade3d');
+
+        // Instanced variant detection (`@instance` vertex inputs, present in
+        // the `-D shade_instanced` transpile of shaders that opt in).
+        if (ctx.is3d) {
+            for (varField in vertData.varFields) {
+                final field = varField.field;
+                if (field.meta.has('instance')) {
+                    ctx.hasInstanceInputs = true;
+                    final n = field.name;
+                    if (n != 'instModel0' && n != 'instModel1' && n != 'instModel2') {
+                        if (ctx.instancedProps == null) ctx.instancedProps = [];
+                        ctx.instancedProps.push(varField);
+                    }
+                }
+            }
+        }
+
+        if (ctx.is3d) {
+            // 3D mode: only the position is "standard" (first @in); other inputs get
+            // real semantics by name (NORMAL/TEXCOORD0/TANGENT/COLOR) and every
+            // varying is a TEXCOORDn (the 2D tcoord/color heuristics don't apply).
+            for (varField in vertData.varFields) {
+                final field = varField.field;
+                if (field.meta.has('in')) {
+                    ctx.inPosition = field.name;
+                    break;
+                }
+            }
+        }
+        else {
 
         // Detect standard @in fields from vertex shader (first 3 non-multi @in fields: position, tcoord, color)
         var inFieldIndex = 0;
@@ -123,6 +161,8 @@ class UnityBackend implements Backend {
             }
         }
 
+        }
+
         // Find the @in @multi field in vertex shader (e.g., vertexTextureId)
         for (varField in vertData.varFields) {
             final field = varField.field;
@@ -141,8 +181,9 @@ class UnityBackend implements Backend {
             }
         }
 
-        // Find the main texture field (first @param Sampler2D) and multi-texture fields
-        for (varField in fragData.varFields) {
+        // Find the main texture field (first @param Sampler2D) and multi-texture fields.
+        // 3D mode: no `_MainTex` aliasing, samplers keep their real names.
+        if (!ctx.is3d) for (varField in fragData.varFields) {
             final field = varField.field;
             if (field.meta.has('param') && ShaderUtils.isSampler2DType(field.type)) {
                 // In non-multi mode, the first Sampler2D (even with @multi) is the main texture
@@ -167,12 +208,34 @@ class UnityBackend implements Backend {
         printer.indent();
 
         // Properties block
-        writePropertiesBlock(printer, vertData, fragData, multi, ctx.mainTextureField);
+        writePropertiesBlock(printer, vertData, fragData, multi, ctx.mainTextureField, ctx);
 
         // SubShader block
         printer.writeln('SubShader');
         printer.writeln('{');
         printer.indent();
+
+        if (ctx.is3d) {
+            // 3D: opaque queue; depth/cull/blend driven per material by the 3D
+            // backend (bridged ShaderLab properties). No stencil.
+            printer.writeln('Tags');
+            printer.writeln('{');
+            printer.indent();
+            printer.writeln('"Queue"="Geometry"');
+            printer.writeln('"IgnoreProjector"="True"');
+            printer.writeln('"RenderType"="Opaque"');
+            printer.unindent();
+            printer.writeln('}');
+            printer.line();
+
+            printer.writeln('Cull [_Cull3D]');
+            printer.writeln('Lighting Off');
+            printer.writeln('ZTest [_ZTest3D]');
+            printer.writeln('ZWrite [_ZWrite3D]');
+            printer.writeln('Blend [_SrcBlendRgb] [_DstBlendRgb], [_SrcBlendAlpha] [_DstBlendAlpha]');
+            printer.line();
+        }
+        else {
 
         // Tags
         printer.writeln('Tags');
@@ -202,6 +265,8 @@ class UnityBackend implements Backend {
         printer.writeln('}');
         printer.line();
 
+        }
+
         // Pass block
         printer.writeln('Pass');
         printer.writeln('{');
@@ -210,6 +275,9 @@ class UnityBackend implements Backend {
 
         printer.writeln('#pragma vertex vert');
         printer.writeln('#pragma fragment frag');
+        if (ctx.hasInstanceInputs) {
+            printer.writeln('#pragma multi_compile_instancing');
+        }
         printer.writeln('#include "UnityCG.cginc"');
         printer.line();
 
@@ -221,6 +289,28 @@ class UnityBackend implements Backend {
         printer.line();
         writeV2fStruct(printer, vertData, ctx);
         printer.line();
+
+        // 3D: the vertex stage has real uniforms (uMvp, uModel, ...), declare them
+        // before the vertex helpers/function (the 2D path has none).
+        if (ctx.is3d) {
+            writeVertexUniforms3D(printer, vertData, ctx);
+            printer.line();
+        }
+
+        // Instanced variant: non-matrix `@instance` inputs (tint, ...) are
+        // Unity instanced properties, filled per chunk by the 3D backend
+        // (MaterialPropertyBlock vector arrays alongside DrawMeshInstanced).
+        if (ctx.instancedProps != null) {
+            printer.writeln('UNITY_INSTANCING_BUFFER_START(CeramicInstanceProps)');
+            printer.indent();
+            for (varField in ctx.instancedProps) {
+                final field = varField.field;
+                printer.writeln('UNITY_DEFINE_INSTANCED_PROP(${compileHlslTypeForVarying(field.type)}, ${field.name}_)');
+            }
+            printer.unindent();
+            printer.writeln('UNITY_INSTANCING_BUFFER_END(CeramicInstanceProps)');
+            printer.line();
+        }
 
         // Vertex helper functions (prefixed with vert_)
         writeHelperFunctions(printer, vertData.funcFields, ctx, 'vert_');
@@ -266,6 +356,51 @@ class UnityBackend implements Backend {
             helperPrinter.writeln('}');
             helperPrinter.line();
         }
+        if (ctx.needsShadeTextureRawHelper) {
+            helperPrinter.line('// Raw sampling for @noflip textures (3D-owned: row 0 = texel row 0)');
+            helperPrinter.writeln('float4 shade_texture_raw(sampler2D tex, float2 uv) {');
+            helperPrinter.indent();
+            helperPrinter.writeln('return tex2D(tex, uv);');
+            helperPrinter.unindent();
+            helperPrinter.writeln('}');
+            helperPrinter.line();
+        }
+        if (ctx.needsFlatNormalHelper) {
+            helperPrinter.line('// Flat (per-face) normal from screen-space derivatives, pointing out');
+            helperPrinter.line('// of the front face. The cross order follows the APPARENT WINDING of');
+            helperPrinter.line('// front faces in raster space (the same parity source as');
+            helperPrinter.line('// shade_front_facing): cross(ddx, ddy) points out of raster-CCW faces.');
+            helperPrinter.line('// On UNITY_UV_STARTS_AT_TOP platforms our GL-CCW front faces land as');
+            helperPrinter.line("// Unity's BACK face, i.e. they rasterize CCW (Unity front = CW) ->");
+            helperPrinter.line('// canonical order; elsewhere they rasterize CW -> swapped. CALIBRATED');
+            helperPrinter.line('// EMPIRICALLY (Fox.glb flat shading, lit from above).');
+            helperPrinter.writeln('float3 shade_flat_normal(float3 p) {');
+            helperPrinter.indent();
+            helperPrinter.writeln('#if UNITY_UV_STARTS_AT_TOP');
+            helperPrinter.writeln('return normalize(cross(ddx(p), ddy(p)));');
+            helperPrinter.writeln('#else');
+            helperPrinter.writeln('return normalize(cross(ddy(p), ddx(p)));');
+            helperPrinter.writeln('#endif');
+            helperPrinter.unindent();
+            helperPrinter.writeln('}');
+            helperPrinter.line();
+        }
+        if (ctx.needsFrontFacingHelper) {
+            helperPrinter.line('// GL-style front-facing: the 3D pipeline submits GL CCW-front geometry,');
+            helperPrinter.line('// which lands as Unity\'s BACK face on platforms where the vertex');
+            helperPrinter.line('// epilogue flips Y (UNITY_UV_STARTS_AT_TOP), parity matches the cull');
+            helperPrinter.line('// mode mapping calibrated in backend.Draw3D.unityCullMode().');
+            helperPrinter.writeln('bool shade_front_facing(bool isFront) {');
+            helperPrinter.indent();
+            helperPrinter.writeln('#if UNITY_UV_STARTS_AT_TOP');
+            helperPrinter.writeln('return !isFront;');
+            helperPrinter.writeln('#else');
+            helperPrinter.writeln('return isFront;');
+            helperPrinter.writeln('#endif');
+            helperPrinter.unindent();
+            helperPrinter.writeln('}');
+            helperPrinter.line();
+        }
         if (ctx.needsShadeModHelper) {
             helperPrinter.line('// GLSL-style mod (floor-based, not truncate-based like fmod)');
             helperPrinter.writeln('float shade_mod(float x, float y) {');
@@ -301,10 +436,49 @@ class UnityBackend implements Backend {
         return result;
     }
 
-    function writePropertiesBlock(printer:Printer, vertData:ShaderClassData, fragData:ShaderClassData, multi:Int, mainTextureFieldName:String):Void {
+    function writePropertiesBlock(printer:Printer, vertData:ShaderClassData, fragData:ShaderClassData, multi:Int, mainTextureFieldName:String, ctx:UnityContext):Void {
         printer.writeln('Properties');
         printer.writeln('{');
         printer.indent();
+
+        if (ctx.is3d) {
+            // 3D: samplers keep their real names (no _MainTex aliasing).
+            for (varField in fragData.varFields.concat(vertData.varFields)) {
+                final field = varField.field;
+                if (field.meta.has('param') && ShaderUtils.isSampler2DType(field.type)) {
+                    printer.writeln('[PerRendererData] ${field.name}_ ("${field.name}", 2D) = "white" {}');
+                }
+                else if (field.meta.has('param') && ShaderUtils.isSamplerCubeType(field.type)) {
+                    printer.writeln('[PerRendererData] ${field.name}_ ("${field.name}", Cube) = "" {}');
+                }
+            }
+
+            // Bridged render state, driven per material by the 3D backend.
+            // Defaults: ZTest LessEqual(4), ZWrite on, Cull off, opaque blend (One/Zero).
+            printer.writeln('_ZTest3D ("ZTest", Float) = 4');
+            printer.writeln('_ZWrite3D ("ZWrite", Float) = 1');
+            printer.writeln('_Cull3D ("Cull", Float) = 0');
+            printer.writeln('_SrcBlendRgb ("Src Rgb", Float) = 1');
+            printer.writeln('_DstBlendRgb ("Dst Rgb", Float) = 0');
+            printer.writeln('_SrcBlendAlpha ("Src Alpha", Float) = 1');
+            printer.writeln('_DstBlendAlpha ("Dst Alpha", Float) = 0');
+
+            // Non-matrix uniforms from both stages.
+            for (varField in vertData.varFields.concat(fragData.varFields)) {
+                final field = varField.field;
+                if (field.meta.has('param') && !ShaderUtils.isSamplerType(field.type) && !ShaderUtils.isMatrixType(field.type)) {
+                    final propType = getUnityPropertyType(field.type);
+                    if (propType != null) {
+                        printer.writeln('${field.name}_ ("${field.name}", $propType) = ${getUnityPropertyDefault(field.type)}');
+                    }
+                }
+            }
+
+            printer.unindent();
+            printer.writeln('}');
+            printer.line();
+            return;
+        }
 
         // Main texture
         if (multi > 0) {
@@ -324,6 +498,9 @@ class UnityBackend implements Backend {
                     printer.writeln('[PerRendererData] ${field.name}_ ("${field.name}", 2D) = "white" {}');
                 }
             }
+            else if (field.meta.has('param') && ShaderUtils.isSamplerCubeType(field.type)) {
+                printer.writeln('[PerRendererData] ${field.name}_ ("${field.name}", Cube) = "" {}');
+            }
         }
 
         // Standard blend properties
@@ -337,7 +514,7 @@ class UnityBackend implements Backend {
         // Note: Matrices are not declared in Properties block - they are passed via SetMatrix/SetFloatArray
         for (varField in fragData.varFields) {
             final field = varField.field;
-            if (field.meta.has('param') && !field.meta.has('multi') && !ShaderUtils.isSampler2DType(field.type)) {
+            if (field.meta.has('param') && !field.meta.has('multi') && !ShaderUtils.isSamplerType(field.type)) {
                 // Skip matrix types - they can't be in Properties block
                 if (ShaderUtils.isMatrixType(field.type)) {
                     continue;
@@ -360,7 +537,9 @@ class UnityBackend implements Backend {
         printer.indent();
 
         // Iterate over all @in fields from the vertex shader
-        var texcoordIndex = 0;
+        // 3D: TEXCOORD0 is reserved for `vertexTCoord` (the mesh UV channel);
+        // unconventional extra inputs start at TEXCOORD1.
+        var texcoordIndex = ctx.is3d ? 1 : 0;
         for (varField in vertData.varFields) {
             final field = varField.field;
             if (field.meta.has('in')) {
@@ -374,14 +553,23 @@ class UnityBackend implements Backend {
 
                 // Assign semantics based on field name/purpose
                 final semantic = getInputSemantic(name, texcoordIndex, ctx);
-                if (semantic.startsWith('TEXCOORD')) {
+                // (3D: `vertexTCoord` has the fixed TEXCOORD0 slot and doesn't consume the counter.)
+                if (semantic.startsWith('TEXCOORD') && !(ctx.is3d && semantic == 'TEXCOORD0')) {
                     texcoordIndex++;
                 }
 
-                // Use float4 for position (to accommodate .w for textureId in multi mode)
-                final actualType = if (name == ctx.inPosition) 'float4' else hlslType;
+                // 2D: use float4 for position (to accommodate .w for textureId in
+                // multi mode). 3D: real type (mesh channels match exactly).
+                final actualType = if (!ctx.is3d && name == ctx.inPosition) 'float4' else hlslType;
                 printer.writeln('$actualType ${name}_ : $semantic;');
             }
+        }
+
+        // Instanced variant: the instance id rides along with the vertex
+        // inputs (Unity instancing macros; the per-instance data itself comes
+        // from unity_ObjectToWorld and instanced properties).
+        if (ctx.hasInstanceInputs) {
+            printer.writeln('UNITY_VERTEX_INPUT_INSTANCE_ID');
         }
 
         printer.unindent();
@@ -389,6 +577,18 @@ class UnityBackend implements Backend {
     }
 
     function getInputSemantic(fieldName:String, texcoordIndex:Int, ctx:UnityContext):String {
+        if (ctx.is3d) {
+            // 3D: real mesh-channel semantics, by name convention (matches the
+            // star Draw3D attribute layout: position/normal/uv/tangent/color).
+            return switch fieldName {
+                case 'vertexPosition': 'POSITION';
+                case 'vertexNormal': 'NORMAL';
+                case 'vertexTCoord': 'TEXCOORD0';
+                case 'vertexTangent': 'TANGENT';
+                case 'vertexColor': 'COLOR';
+                case _: 'TEXCOORD$texcoordIndex';
+            }
+        }
         // Map field names to Unity semantics based on detected standard fields
         if (fieldName == ctx.inPosition) return 'POSITION';
         if (fieldName == ctx.inColor) return 'COLOR';
@@ -422,7 +622,11 @@ class UnityBackend implements Backend {
                     texcoordIndex++;
                 }
 
-                printer.writeln('$hlslType ${name}_ : $semantic;');
+                // 3D: centroid interpolation keeps varyings inside the covered region
+                // of the triangle with MSAA, so silhouette pixels never shade with
+                // extrapolated normals/positions (specular/fresnel artifacts).
+                final qualifier = ctx.is3d ? 'centroid ' : '';
+                printer.writeln('$qualifier$hlslType ${name}_ : $semantic;');
             }
         }
 
@@ -443,6 +647,11 @@ class UnityBackend implements Backend {
     }
 
     function writeVertexFunction(printer:Printer, vertData:ShaderClassData, ctx:UnityContext):Void {
+        if (ctx.is3d) {
+            writeVertexFunction3D(printer, vertData, ctx);
+            return;
+        }
+
         printer.writeln('v2f vert(appdata_t IN)');
         printer.writeln('{');
         printer.indent();
@@ -504,6 +713,97 @@ class UnityBackend implements Backend {
         printer.writeln('}');
     }
 
+    /**
+     * 3D vertex function: unlike the 2D path (which only compiles `@out`
+     * assignments and overrides the position with `UnityObjectToClipPos`), the
+     * 3D shader computes its own clip-space position, compile EVERY statement
+     * of `main()` (locals, control flow) with the full expression printer, and
+     * emit `OUT.position = <returned expr>;` followed by the platform epilogue:
+     *
+     *  - Y flip + GL→D3D depth-range remap on UV-starts-at-top platforms
+     *    (D3D/Metal/Vulkan). The shade shaders produce OpenGL-convention clip
+     *    coordinates (z in [-w, w], y up with row 0 = bottom); the epilogue makes
+     *    them platform-correct. The 3D backend compensates the winding flip in
+     *    its CullMode mapping, and clears/compares depth with the non-reversed
+     *    convention (clear 1.0, LESS_EQUAL).
+     */
+    function writeVertexFunction3D(printer:Printer, vertData:ShaderClassData, ctx:UnityContext):Void {
+        printer.writeln('v2f vert(appdata_t IN)');
+        printer.writeln('{');
+        printer.indent();
+
+        printer.writeln('v2f OUT;');
+
+        // Instanced variant: resolve the instance id before anything reads
+        // unity_ObjectToWorld or an instanced property.
+        if (ctx.hasInstanceInputs) {
+            printer.writeln('UNITY_SETUP_INSTANCE_ID(IN);');
+        }
+
+        // Map @out fields to OUT.xxx_ in the shared expression printer.
+        final outFields = new Map<String, Bool>();
+        for (varField in vertData.varFields) {
+            final field = varField.field;
+            if (field.meta.has('out')) {
+                outFields.set(field.name, true);
+            }
+        }
+        ctx.vertexOutFields = outFields;
+        ctx.multiShader = VERT;
+
+        for (funcField in vertData.funcFields) {
+            if (funcField.field.name == 'main') {
+                switch funcField.expr.expr {
+                    case TBlock(el):
+                        for (expr in el) {
+                            switch expr.expr {
+                                case TReturn(e):
+                                    printer.write('OUT.position = ');
+                                    printExpression(printer, e, ctx);
+                                    if (!printer.endsBlock()) {
+                                        printer.endBlock(';');
+                                        printer.line();
+                                    }
+                                case _:
+                                    printExpression(printer, expr, ctx);
+                                    if (!printer.endsBlock()) {
+                                        printer.endBlock(';');
+                                        printer.line();
+                                    }
+                            }
+                        }
+                    case _:
+                }
+            }
+        }
+
+        ctx.vertexOutFields = null;
+        ctx.multiShader = FRAG;
+
+        printer.line();
+        // Platform conventions epilogue. The shade shaders compute OpenGL-style
+        // clip coordinates (y up, z in [-w, w]); make them platform-correct:
+        //  - Y flip on UV-starts-at-top platforms (D3D/Metal/Vulkan).
+        //  - Z range: Unity treats depth SEMANTICALLY (clear values and ShaderLab
+        //    ZTest comparisons are converted internally on reversed-Z platforms),
+        //    so the shader must output the platform's native storage convention:
+        //    reversed [w..0] (near=1) under UNITY_REVERSED_Z, plain D3D [0..w]
+        //    otherwise, untouched GL [-w..w] on OpenGL.
+        printer.writeln('#if UNITY_UV_STARTS_AT_TOP');
+        printer.writeln('OUT.position.y = -OUT.position.y;');
+        printer.writeln('#endif');
+        printer.writeln('#if UNITY_REVERSED_Z');
+        printer.writeln('OUT.position.z = (OUT.position.w - OUT.position.z) * 0.5;');
+        printer.writeln('#elif UNITY_UV_STARTS_AT_TOP');
+        printer.writeln('OUT.position.z = (OUT.position.z + OUT.position.w) * 0.5;');
+        printer.writeln('#endif');
+        printer.line();
+        printer.writeln('return OUT;');
+
+        printer.unindent();
+        printer.writeln('}');
+    }
+
     function isOutAssignment(expr:TypedExpr, outFields:Map<String, Bool>):Bool {
         // Check if this is an assignment to an @out field
         return switch expr.expr {
@@ -534,11 +834,7 @@ class UnityBackend implements Backend {
                     case TInt(i):
                         printer.write(Std.string(i));
                     case TFloat(s):
-                        final str = Std.string(s);
-                        printer.write(str);
-                        if (str.indexOf('.') == -1) {
-                            printer.write('.0');
-                        }
+                        printer.write(ShaderUtils.formatFloatLiteral(s));
                     case TBool(b):
                         printer.write(b ? 'true' : 'false');
                     case _:
@@ -592,7 +888,14 @@ class UnityBackend implements Backend {
                             case _:
                         }
                     case _:
-                        printVertexExpression(printer, e, ctx, inFields, outFields);
+                        if (ShaderUtils.fieldTargetNeedsParens(e)) {
+                            printer.write('(');
+                            printVertexExpression(printer, e, ctx, inFields, outFields);
+                            printer.write(')');
+                        }
+                        else {
+                            printVertexExpression(printer, e, ctx, inFields, outFields);
+                        }
                         printer.write('.');
                         switch fa {
                             case FInstance(_, _, cf):
@@ -617,11 +920,34 @@ class UnityBackend implements Backend {
         }
     }
 
+    /**
+     * 3D mode: declare the vertex stage's `@param` uniforms (mat4 as float4x4,
+     * scalars/vectors as-is). mat2/mat3 vertex uniforms are not supported (none
+     * used by the 3D pipeline; they would need the float-array reconstruction).
+     */
+    function writeVertexUniforms3D(printer:Printer, vertData:ShaderClassData, ctx:UnityContext):Void {
+        for (varField in vertData.varFields) {
+            final field = varField.field;
+            if (field.meta.has('param')) {
+                if (ShaderUtils.isSamplerType(field.type)) {
+                    printer.writeln(ShaderUtils.isSamplerCubeType(field.type)
+                        ? 'samplerCUBE ${field.name}_;'
+                        : 'sampler2D ${field.name}_;');
+                }
+                else {
+                    printer.writeln('${compileHlslType(field.type)} ${field.name}_;');
+                }
+                ctx.declaredUniforms.set(field.name, true);
+            }
+        }
+    }
+
     function writeFragmentUniforms(printer:Printer, fragData:ShaderClassData, ctx:UnityContext):Void {
         // All uniforms from fragment shader
         for (varField in fragData.varFields) {
             final field = varField.field;
             if (field.meta.has('param')) {
+                if (ctx.declaredUniforms.exists(field.name)) continue; // already declared by the vertex stage (3D)
                 if (ShaderUtils.isSampler2DType(field.type)) {
                     // Sampler2D uniform
                     if (field.meta.has('multi') && ctx.multi > 0) {
@@ -633,10 +959,17 @@ class UnityBackend implements Backend {
                     } else if (field.name == ctx.mainTextureField) {
                         // Main texture
                         printer.writeln('sampler2D _MainTex;');
+                    } else if (field.meta.has('fetch')) {
+                        // `@fetch` data textures are read with texelFetch()
+                        // (`.Load`): HLSL needs the Texture2D object form, not
+                        // a sampler (no filtering involved).
+                        printer.writeln('Texture2D ${field.name}_;');
                     } else {
                         // Other texture samplers
                         printer.writeln('sampler2D ${field.name}_;');
                     }
+                } else if (ShaderUtils.isSamplerCubeType(field.type)) {
+                    printer.writeln('samplerCUBE ${field.name}_;');
                 } else if (!field.meta.has('multi')) {
                     // Check for mat2/mat3 types - declare as float arrays
                     if (ShaderUtils.isMat2Type(field.type)) {
@@ -655,7 +988,9 @@ class UnityBackend implements Backend {
     }
 
     function writeFragmentFunction(printer:Printer, fragData:ShaderClassData, ctx:UnityContext):Void {
-        printer.writeln('fixed4 frag(v2f IN) : SV_Target');
+        // 3D renders HDR radiance into half-float targets: full float output
+        // (fixed4 may clamp to [-2, 2] on some GPUs).
+        printer.writeln(ctx.is3d ? 'float4 frag(v2f IN, bool isFrontFace_ : SV_IsFrontFace) : SV_Target' : 'fixed4 frag(v2f IN) : SV_Target');
         printer.writeln('{');
         printer.indent();
 
@@ -759,11 +1094,7 @@ class UnityBackend implements Backend {
                     case TInt(i):
                         printer.write(Std.string(i));
                     case TFloat(s):
-                        final str = Std.string(s);
-                        printer.write(str);
-                        if (str.indexOf('.') == -1) {
-                            printer.write('.0');
-                        }
+                        printer.write(ShaderUtils.formatFloatLiteral(s));
                     case TString(s):
                     case TBool(b):
                         printer.write(b ? 'true' : 'false');
@@ -808,9 +1139,27 @@ class UnityBackend implements Backend {
                                 final fieldMeta = cf.get().meta;
                                 final isIn = fieldMeta.has('in');
                                 final isUniform = fieldMeta.has('param');
+                                final isInstance = fieldMeta.has('instance');
 
+                                // 3D vertex compilation: @out fields map to OUT.xxx_
+                                if (ctx.vertexOutFields != null && ctx.vertexOutFields.exists(name)) {
+                                    printer.write('OUT.${name}_');
+                                }
+                                // Per-instance inputs (instanced variant): the Model rows
+                                // come from unity_ObjectToWorld (one matrix per instance,
+                                // supplied by DrawMeshInstanced, HLSL m[i] is row i, same
+                                // column-vector convention as our dot(row, (p,1)) scheme);
+                                // any other @instance field is an instanced property.
+                                else if (isInstance) {
+                                    switch name {
+                                        case 'instModel0': printer.write('unity_ObjectToWorld[0]');
+                                        case 'instModel1': printer.write('unity_ObjectToWorld[1]');
+                                        case 'instModel2': printer.write('unity_ObjectToWorld[2]');
+                                        case _: printer.write('UNITY_ACCESS_INSTANCED_PROP(CeramicInstanceProps, ${name}_)');
+                                    }
+                                }
                                 // Map fragment inputs (@in fields)
-                                if (isIn) {
+                                else if (isIn) {
                                     printer.write('IN.${name}_');
                                 } else if (isUniform) {
                                     // Handle uniform fields - check if this is a Sampler2D type
@@ -838,7 +1187,14 @@ class UnityBackend implements Backend {
                             case _:
                         }
                     case _:
-                        printExpression(printer, e, ctx);
+                        if (ShaderUtils.fieldTargetNeedsParens(e)) {
+                            printer.write('(');
+                            printExpression(printer, e, ctx);
+                            printer.write(')');
+                        }
+                        else {
+                            printExpression(printer, e, ctx);
+                        }
                         printer.write('.');
                         switch fa {
                             case FInstance(c, params, cf):
@@ -881,10 +1237,14 @@ class UnityBackend implements Backend {
                                     }
                                 }
 
-                                // Detect abstract getters
+                                // Detect abstract getters (e.g. swizzles `.xyz`). Parenthesize the
+                                // target if it's an operator expression: `(m * v).xyz`, not `m * v.xyz`.
                                 if (fieldName.startsWith('get_')) {
                                     final propName = fieldName.substr(4);
+                                    final needsParens = ShaderUtils.fieldTargetNeedsParens(el[0]);
+                                    if (needsParens) printer.write('(');
                                     printExpression(printer, el[0], ctx);
+                                    if (needsParens) printer.write(')');
                                     printer.write('.');
                                     printer.write(propName);
                                     return;
@@ -893,7 +1253,10 @@ class UnityBackend implements Backend {
                                 // Detect abstract setters
                                 if (fieldName.startsWith('set_')) {
                                     final propName = fieldName.substr(4);
+                                    final needsParens = ShaderUtils.fieldTargetNeedsParens(el[0]);
+                                    if (needsParens) printer.write('(');
                                     printExpression(printer, el[0], ctx);
+                                    if (needsParens) printer.write(')');
                                     printer.write('.');
                                     printer.write(propName);
                                     printer.write(' = ');
@@ -918,13 +1281,76 @@ class UnityBackend implements Backend {
                     return;
                 }
 
-                // Special handling for textureLod -> tex2Dlod with float4 wrapper
+                // `discard` is a statement keyword in HLSL, not a function call.
+                if (funcName == 'discard' && el.length == 0) {
+                    printer.write('discard');
+                    return;
+                }
+
+                // `frontFacing()` maps to the SV_IsFrontFace input of the 3D frag
+                // signature, through a helper restoring GL front/back parity.
+                if (funcName == 'frontFacing' && el.length == 0) {
+                    ctx.needsFrontFacingHelper = true;
+                    printer.write('shade_front_facing(isFrontFace_)');
+                    return;
+                }
+
+                // `texelFetch(s, x, y)`, exact texel read on a `@fetch`
+                // Texture2D (declared as such in writeFragmentUniforms).
+                if (funcName == 'texelFetch' && el.length == 3) {
+                    printExpression(printer, el[0], ctx);
+                    printer.write('.Load(int3((int)(');
+                    printExpression(printer, el[1], ctx);
+                    printer.write('), (int)(');
+                    printExpression(printer, el[2], ctx);
+                    printer.write('), 0))');
+                    return;
+                }
+
+                // `flatNormal()` maps to a helper restoring the GL derivative
+                // orientation (the rasterizer y axis differs across platforms).
+                if (funcName == 'flatNormal' && el.length == 1) {
+                    ctx.needsFlatNormalHelper = true;
+                    printer.write('shade_flat_normal(');
+                    printExpression(printer, el[0], ctx);
+                    printer.write(')');
+                    return;
+                }
+
+                // Special handling for texture on a cube sampler -> texCUBE.
+                // (2D `texture` is handled by mapFunctionName -> shade_texture, which
+                // flips V to match Unity's UV origin; cube directions are world-space
+                // and must NOT be flipped.)
+                if (funcName == 'texture' && el.length == 2 && ShaderUtils.isSamplerCubeType(el[0].t)) {
+                    printer.write('texCUBE(');
+                    printExpression(printer, el[0], ctx); // sampler
+                    printer.write(', ');
+                    printExpression(printer, el[1], ctx); // direction
+                    printer.write(')');
+                    return;
+                }
+
+                // `@noflip` Sampler2D params (3D-backend-owned textures stored with
+                // row 0 = texel row 0: panoramas, LUTs, shadow maps) sample raw,
+                // the Y-flip of shade_texture only applies to ceramic 2D textures.
+                if (funcName == 'texture' && el.length == 2 && isNoflipSampler(el[0])) {
+                    ctx.needsShadeTextureRawHelper = true;
+                    printer.write('shade_texture_raw(');
+                    printExpression(printer, el[0], ctx); // sampler
+                    printer.write(', ');
+                    printExpression(printer, el[1], ctx); // uv
+                    printer.write(')');
+                    return;
+                }
+
+                // Special handling for textureLod -> tex2Dlod / texCUBElod with float4 wrapper
                 if (funcName == 'textureLod' && el.length == 3) {
-                    printer.write('tex2Dlod(');
+                    final isCube = ShaderUtils.isSamplerCubeType(el[0].t);
+                    printer.write(isCube ? 'texCUBElod(' : 'tex2Dlod(');
                     printExpression(printer, el[0], ctx); // sampler
                     printer.write(', float4(');
-                    printExpression(printer, el[1], ctx); // uv
-                    printer.write(', 0, ');
+                    printExpression(printer, el[1], ctx); // uv (vec2) or direction (vec3)
+                    printer.write(isCube ? ', ' : ', 0, ');
                     printExpression(printer, el[2], ctx); // lod
                     printer.write('))');
                     return;
@@ -952,6 +1378,15 @@ class UnityBackend implements Backend {
                         printExpression(printer, el[i], ctx);
                     }
                     printer.write(')');
+                    return;
+                }
+
+                // Truncating matrix conversion: HLSL has no float3x3(float4x4)
+                // CONSTRUCTOR, only the cast form ((float3x3)m).
+                if ((funcName == 'mat2' || funcName == 'mat3') && el.length == 1 && ShaderUtils.isMatrixType(el[0].t)) {
+                    printer.write('((${mapTypeName(funcName)})(');
+                    printExpression(printer, el[0], ctx);
+                    printer.write('))');
                     return;
                 }
 
@@ -1236,6 +1671,15 @@ class UnityBackend implements Backend {
         }
     }
 
+    /** Whether the sampled expression is a shader param annotated `@noflip`. */
+    function isNoflipSampler(e:TypedExpr):Bool {
+        return switch e.expr {
+            case TField(_, FInstance(_, _, cf)): cf.get().meta.has('noflip');
+            case TParenthesis(inner): isNoflipSampler(inner);
+            case _: false;
+        }
+    }
+
     function getFunctionName(e:TypedExpr):String {
         return switch e.expr {
             case TField(_, fa):
@@ -1393,6 +1837,32 @@ class UnityContext {
     public var multiCurrentSlot:Int = -1;
     public var needsShadeModHelper:Bool = false;
     public var needsShadeTextureHelper:Bool = false;
+    public var needsShadeTextureRawHelper:Bool = false;
+
+    public var needsFrontFacingHelper:Bool = false;
+
+    public var needsFlatNormalHelper:Bool = false;
+    /**
+     * 3D mode (classes annotated `@:shade3d`): real vertex semantics
+     * (POSITION/NORMAL/TEXCOORD0/TANGENT/COLOR), full vertex main() compilation
+     * (the shader computes its own clip-space position), bridged render state
+     * (ZTest/ZWrite/Cull/Blend driven by material ints), no multi-texture, no
+     * `_MainTex` aliasing (samplers keep their real names).
+     */
+    public var is3d:Bool = false;
+
+    /** Instanced variant: the vertex class declares `@instance` inputs. */
+    public var hasInstanceInputs:Bool = false;
+
+    /**
+     * `@instance` fields that are NOT the instModel0..2 matrix rows (those map
+     * to unity_ObjectToWorld): emitted as Unity instanced properties.
+     */
+    public var instancedProps:Array<reflaxe.data.ClassVarData> = null;
+    // 3D vertex compilation: @out field names (mapped to OUT.xxx_ by printExpression)
+    public var vertexOutFields:Map<String, Bool> = null;
+    // 3D: uniform names already declared by the vertex stage (skip duplicates in fragment)
+    public var declaredUniforms:Map<String, Bool> = new Map();
     // For vertex shader: the @in @multi field name (e.g., "vertexTextureId")
     public var vertexInputMultiField:String = null;
     // The name of the main texture uniform field (detected by Sampler2D type)

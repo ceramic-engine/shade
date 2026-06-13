@@ -33,7 +33,7 @@ class GlslBackend implements Backend {
         if (parent == null) return;
         if (parent.pack == null || parent.pack.length != 1 || parent.pack[0] != 'shade') return;
 
-        final shaderName = ShaderUtils.getQualifiedBaseName(classType.pack, classType.name);
+        final shaderName = ShaderUtils.getQualifiedBaseName(classType.pack, classType.name) + ShaderUtils.getOutputSuffix();
 
         switch parent.name {
             case 'Vert':
@@ -99,16 +99,37 @@ class GlslBackend implements Backend {
                 printer.line();
             }
         }
+        // Per-instance attributes (`@instance`, instanced variant only):
+        // regular attributes whose buffer advances per INSTANCE, the GL
+        // backend points them at the instance buffer with a vertex attrib
+        // divisor of 1, at locations queried by name after link.
+        for (varField in varFields) {
+            final field = varField.field;
+            if (field.meta.has('instance')) {
+                numIns++;
+                printer.write("in ");
+                printer.write(compileGlslType(field.type));
+                printer.write(" ");
+                printer.write(field.name);
+                printer.write(";");
+                printer.line();
+            }
+        }
         if (numIns > 0) {
             printer.line();
         }
 
         // Attributes (out)
+        // 3D: centroid interpolation keeps varyings inside the covered region of the
+        // triangle with MSAA, so silhouette pixels never shade with extrapolated
+        // normals/positions (specular/fresnel artifacts).
+        final is3d = classType.meta.has(':shade3d');
         var numOuts = 0;
         for (varField in varFields) {
             final field = varField.field;
             if (field.meta.has('out') && (!field.meta.has('multi') || ctx.multi > 0)) {
                 numOuts++;
+                if (is3d) printer.write("centroid ");
                 printer.write("out ");
                 printer.write(compileGlslType(field.type));
                 printer.write(" ");
@@ -125,7 +146,7 @@ class GlslBackend implements Backend {
         var numGlobals = 0;
         for (varField in varFields) {
             final field = varField.field;
-            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('param')) {
+            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('param') && !field.meta.has('instance')) {
                 numGlobals++;
                 printer.write(compileGlslType(field.type));
                 printer.write(" ");
@@ -288,11 +309,14 @@ class GlslBackend implements Backend {
         }
 
         // Attributes (in)
+        // 3D: centroid must match the vertex stage `centroid out` qualifiers.
+        final is3d = classType.meta.has(':shade3d');
         var numIns = 0;
         for (varField in varFields) {
             final field = varField.field;
             if (field.meta.has('in') && (!field.meta.has('multi') || ctx.multi > 0)) {
                 numIns++;
+                if (is3d) printer.write("centroid ");
                 printer.write("in ");
                 printer.write(compileGlslType(field.type));
                 printer.write(" ");
@@ -312,7 +336,7 @@ class GlslBackend implements Backend {
         var numGlobals = 0;
         for (varField in varFields) {
             final field = varField.field;
-            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('param')) {
+            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('param') && !field.meta.has('instance')) {
                 numGlobals++;
                 printer.write(compileGlslType(field.type));
                 printer.write(" ");
@@ -400,11 +424,7 @@ class GlslBackend implements Backend {
                     case TInt(i):
                         printer.write(Std.string(i));
                     case TFloat(s):
-                        final str = Std.string(s);
-                        printer.write(str);
-                        if (str.indexOf('.') == -1) {
-                            printer.write('.0');
-                        }
+                        printer.write(ShaderUtils.formatFloatLiteral(s));
                     case TString(s):
                     case TBool(b):
                         if (b) {
@@ -489,7 +509,14 @@ class GlslBackend implements Backend {
                 switch e.expr {
                     case TConst(TThis):
                     case _:
-                        printExpression(printer, e, ctx);
+                        if (ShaderUtils.fieldTargetNeedsParens(e)) {
+                            printer.write('(');
+                            printExpression(printer, e, ctx);
+                            printer.write(')');
+                        }
+                        else {
+                            printExpression(printer, e, ctx);
+                        }
                         printer.write('.');
                 }
                 switch fa {
@@ -532,7 +559,44 @@ class GlslBackend implements Backend {
                                 if (defType.module == 'shade.Functions') {
                                     switch fa {
                                         case FStatic(c, cf):
-                                            printer.write(cf.get().name);
+                                            final fnName = cf.get().name;
+                                            if (fnName == 'discard') {
+                                                // GLSL `discard` is a statement keyword, not a call.
+                                                printer.write('discard');
+                                                return;
+                                            }
+                                            if (fnName == 'frontFacing') {
+                                                // Maps to the GLSL built-in variable, not a call.
+                                                printer.write('gl_FrontFacing');
+                                                return;
+                                            }
+                                            if (fnName == 'texelFetch') {
+                                                // Exact texel read: integer coordinates, mip 0.
+                                                printer.write('texelFetch(');
+                                                printExpression(printer, el[0], ctx);
+                                                printer.write(', ivec2(int(');
+                                                printExpression(printer, el[1], ctx);
+                                                printer.write('), int(');
+                                                printExpression(printer, el[2], ctx);
+                                                printer.write(')), 0)');
+                                                return;
+                                            }
+                                            if (fnName == 'flatNormal') {
+                                                // Flat (per-face) normal from screen-space
+                                                // derivatives (the argument is printed twice).
+                                                // The cross product order is swapped vs the
+                                                // canonical GL formula cross(dFdx, dFdy): the 3D
+                                                // pipeline renders into render textures through a
+                                                // mirrored viewport (shouldFlipRenderTargetY),
+                                                // which flips the raster-space y gradient.
+                                                printer.write('normalize(cross(dFdy(');
+                                                printExpression(printer, el[0], ctx);
+                                                printer.write('), dFdx(');
+                                                printExpression(printer, el[0], ctx);
+                                                printer.write(')))');
+                                                return;
+                                            }
+                                            printer.write(fnName);
                                         case _:
                                     }
                                     printer.write('(');
@@ -569,10 +633,15 @@ class GlslBackend implements Backend {
                                     }
                                 }
 
-                                // Detect abstract getters
+                                // Detect abstract getters (e.g. swizzles `.xyz`). Parenthesize
+                                // the target if it's an operator expression so the swizzle binds
+                                // to the whole thing: `(m * v).xyz`, not `m * v.xyz`.
                                 if (fieldName.startsWith('get_')) {
                                     final propName = fieldName.substr(4);
+                                    final needsParens = ShaderUtils.fieldTargetNeedsParens(el[0]);
+                                    if (needsParens) printer.write('(');
                                     printExpression(printer, el[0], ctx);
+                                    if (needsParens) printer.write(')');
                                     printer.write('.');
                                     printer.write(propName);
                                     return;
@@ -581,7 +650,10 @@ class GlslBackend implements Backend {
                                 // Detect abstract setters
                                 if (fieldName.startsWith('set_')) {
                                     final propName = fieldName.substr(4);
+                                    final needsParens = ShaderUtils.fieldTargetNeedsParens(el[0]);
+                                    if (needsParens) printer.write('(');
                                     printExpression(printer, el[0], ctx);
+                                    if (needsParens) printer.write(')');
                                     printer.write('.');
                                     printer.write(propName);
                                     printer.write(' = ');

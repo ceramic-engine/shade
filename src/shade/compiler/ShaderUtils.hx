@@ -43,6 +43,16 @@ class ShaderUtils {
     }
 
     /**
+     * Output filename suffix of the current transpile variant. The instanced
+     * variant (`-D shade_instanced`; shader sources opt in with
+     * `#if shade_instanced` blocks and `@instance` vertex fields) appends
+     * `_inst` so both variants of a shader coexist in the output folder.
+     */
+    public static function getOutputSuffix():String {
+        return haxe.macro.Context.defined('shade_instanced') ? '_inst' : '';
+    }
+
+    /**
      * Check if a class name represents a vertex shader.
      */
     public static function isVertexShader(className:String):Bool {
@@ -170,6 +180,86 @@ class ShaderUtils {
                 t.get().name == 'Sampler2D';
             case _:
                 false;
+        }
+    }
+
+    /**
+     * Check if a type is SamplerCube.
+     */
+    public static function isSamplerCubeType(type:Type):Bool {
+        return switch type {
+            case TInst(t, _):
+                t.get().name == 'SamplerCube';
+            case TAbstract(t, _):
+                t.get().name == 'SamplerCube';
+            case _:
+                false;
+        }
+    }
+
+    /**
+     * Check if a type is any sampler kind (Sampler2D or SamplerCube).
+     */
+    public static function isSamplerType(type:Type):Bool {
+        return isSampler2DType(type) || isSamplerCubeType(type);
+    }
+
+    /**
+     * Format a float literal (the `String` payload of `TConst(TFloat(s))`) for shader output.
+     *
+     * Ensures a trailing `.0` for integer-looking values (e.g. `"2"` -> `"2.0"`) so they keep
+     * float type in GLSL/HLSL/PSSL, but leaves alone any literal that already has a decimal
+     * point OR an exponent. Notably `"1e-9"` stays `"1e-9"` (a valid float literal in all three
+     * targets) instead of becoming the invalid `"1e-9.0"`.
+     */
+    public static function formatFloatLiteral(s:String):String {
+        if (s.indexOf('.') == -1 && s.indexOf('e') == -1 && s.indexOf('E') == -1) {
+            return s + '.0';
+        }
+        return s;
+    }
+
+    /**
+     * Returns true if `callee` is the static method of an abstract `@:op` operator overload
+     * (e.g. Mat*Vec, Vec*Vec, vec*scalar, vec+scalar...). These are represented as
+     * `TCall(TField(_, FStatic(c, cf)), args)` where the resolved static field carries `:op`.
+     * Mirrors the detection used by each backend's `needsParenthesesForPrecedence`.
+     */
+    public static function isAbstractOpCall(callee:TypedExpr):Bool {
+        switch callee.expr {
+            case TField(_, fa):
+                switch fa {
+                    case FStatic(c, cf):
+                        final fieldName = cf.get().name;
+                        for (f in c.get().statics.get()) {
+                            if (f.name == fieldName) {
+                                return f.meta.has(':op');
+                            }
+                        }
+                    case _:
+                }
+            case _:
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if expression `e`, when used as the target of a field access / swizzle
+     * (`e.field`), must be wrapped in parentheses so the field binds to the whole expression
+     * rather than just its right operand, e.g. `(m * v).xyz`, not `m * v.xyz`.
+     *
+     * True for raw binops, unary ops, ternaries, casts, and abstract `@:op` operator calls
+     * (operators are emitted infix). False for primary expressions and ordinary function calls
+     * (`normalize(x).xyz` must stay unparenthesized).
+     */
+    public static function fieldTargetNeedsParens(e:TypedExpr):Bool {
+        return switch e.expr {
+            case TBinop(_, _, _): true;
+            case TUnop(_, _, _): true;
+            case TIf(_, _, _): true;
+            case TCast(_, _): true;
+            case TCall(callee, _): isAbstractOpCall(callee);
+            case _: false;
         }
     }
 }

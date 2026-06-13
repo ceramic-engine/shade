@@ -76,7 +76,9 @@ abstract Vec2(IVec2) {
 
     // Operators
     @:op(A + B) static function add(a:Vec2, b:Vec2):Vec2 { return null; }
+    @:op(A + B) @:commutative static function addScalar(a:Vec2, b:Float):Vec2 { return null; }
     @:op(A - B) static function sub(a:Vec2, b:Vec2):Vec2 { return null; }
+    @:op(A - B) static function subScalar(a:Vec2, b:Float):Vec2 { return null; }
     @:op(A * B) static function mul(a:Vec2, b:Vec2):Vec2 { return null; }
     @:op(A * B) @:commutative static function mulScalar(a:Vec2, b:Float):Vec2 { return null; }
     @:op(A / B) static function div(a:Vec2, b:Vec2):Vec2 { return null; }

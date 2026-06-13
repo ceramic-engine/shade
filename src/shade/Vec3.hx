@@ -313,7 +313,9 @@ abstract Vec3(IVec3) {
 
     // Operators
     @:op(A + B) static function add(a:Vec3, b:Vec3):Vec3 { return null; }
+    @:op(A + B) @:commutative static function addScalar(a:Vec3, b:Float):Vec3 { return null; }
     @:op(A - B) static function sub(a:Vec3, b:Vec3):Vec3 { return null; }
+    @:op(A - B) static function subScalar(a:Vec3, b:Float):Vec3 { return null; }
     @:op(A * B) static function mul(a:Vec3, b:Vec3):Vec3 { return null; }
     @:op(A * B) @:commutative static function mulScalar(a:Vec3, b:Float):Vec3 { return null; }
     @:op(A / B) static function div(a:Vec3, b:Vec3):Vec3 { return null; }

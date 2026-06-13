@@ -252,7 +252,7 @@ class ShadeMacro {
         textureSlotsExpr.addChar('\n'.code);
         textureSlotsExpr.add('return switch name {\n');
         for (name => info in paramInfo) {
-            if (info.type == Sampler2D) {
+            if (info.type == Sampler2D || info.type == SamplerCube) {
                 textureSlotsExpr.add('case "$name": ${info.texSlot};\n');
             }
         }
@@ -381,6 +381,7 @@ class ShadeMacro {
             case Mat3: 9;
             case Mat4: 16;
             case Sampler2D: 1;
+            case SamplerCube: 1;
         }
 
     }
@@ -715,6 +716,10 @@ class ShadeMacro {
                     },
                     ret: macro :Void
                 }));
+
+            case SamplerCube:
+                // No ceramic-side setter: cube textures are backend-owned resources
+                // (e.g. IBL cubemaps) bound through the 3D backend, not ceramic.Texture.
         }
 
         return result;
@@ -838,7 +843,9 @@ class ShadeMacro {
                                 if (field.doc != null) {
                                     result.doc = field.doc;
                                 }
-                                if (type == Sampler2D) {
+                                if (type == Sampler2D || type == SamplerCube) {
+                                    // 2D and cube samplers share one slot counter, in
+                                    // declaration order (= GL texture units).
                                     result.texSlot = nextTextureSlot;
                                     nextTextureSlot++;
                                 }

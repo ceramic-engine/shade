@@ -12,7 +12,33 @@ extern class Functions {
      * @param coord The texture coordinates (0.0 to 1.0 range typically)
      * @return The color value at the sampled location as a Vec4 (RGBA)
      */
-    public static function texture(sampler:Sampler2D, coord:Vec2):Vec4;
+    public static overload function texture(sampler:Sampler2D, coord:Vec2):Vec4;
+
+    /**
+     * Samples a cube texture in the given direction.
+     * @param sampler The cube texture sampler to read from
+     * @param dir The direction vector (does not need to be normalized)
+     * @return The color value at the sampled location as a Vec4 (RGBA)
+     */
+    public static overload function texture(sampler:SamplerCube, dir:Vec3):Vec4;
+
+    /**
+     * Samples a texture at the given coordinate using an explicit mipmap level of detail.
+     * @param sampler The texture sampler to read from
+     * @param coord The texture coordinates (0.0 to 1.0 range typically)
+     * @param lod The mipmap level to sample (0.0 = base/highest resolution)
+     * @return The color value at the sampled location as a Vec4 (RGBA)
+     */
+    public static overload function textureLod(sampler:Sampler2D, coord:Vec2, lod:Float):Vec4;
+
+    /**
+     * Samples a cube texture in the given direction using an explicit mipmap level of detail.
+     * @param sampler The cube texture sampler to read from
+     * @param dir The direction vector (does not need to be normalized)
+     * @param lod The mipmap level to sample (0.0 = base/highest resolution)
+     * @return The color value at the sampled location as a Vec4 (RGBA)
+     */
+    public static overload function textureLod(sampler:SamplerCube, dir:Vec3, lod:Float):Vec4;
 
     /**
      * Returns the partial derivative of p with respect to the window x coordinate.
@@ -95,6 +121,44 @@ extern class Functions {
      * Only available in fragment shaders. Cannot be called conditionally in all implementations.
      */
     public static function discard():Void;
+
+    /**
+     * Tells if the current fragment belongs to a front-facing primitive.
+     * Only available in fragment shaders.
+     */
+    public static function frontFacing():Bool;
+
+    /**
+     * Fetches one exact texel at integer coordinates (no filtering, no
+     * wrapping), from mip level 0, for data textures (light lists, cluster
+     * tables...). Coordinates are Floats in the DSL (exact up to 2^24); each
+     * backend converts them to integers.
+     *
+     * The sampler's `@param` declaration must carry the `@fetch` annotation:
+     * backends whose fetched textures need a different declaration form than
+     * filtered samplers (HLSL `Texture2D` + `Load` vs `sampler2D` + `tex2D`)
+     * switch on it. A `@fetch` sampler must not also be used with `texture()`.
+     * Only available in fragment shaders.
+     */
+    public static function texelFetch(sampler:Sampler2D, x:Float, y:Float):Vec4;
+
+    /**
+     * Computes the flat (per-face) normal of the current triangle from
+     * screen-space derivatives of the given position (typically a world-space
+     * position varying). The result points out of the front face. The argument
+     * may be evaluated more than once, so it should be a simple expression
+     * without side effects.
+     *
+     * Backend note: the sign of the cross product depends on the raster-space
+     * y orientation of the pipeline that consumes the generated shader. Each
+     * shade backend must emit it accordingly: GLSL assumes the GL 3D pipeline,
+     * which always renders into render textures through a mirrored viewport
+     * (`shouldFlipRenderTargetY()`); Unity gates on `UNITY_UV_STARTS_AT_TOP`
+     * (no viewport mirror there). A new backend (e.g. PSSL) must pick the
+     * orientation matching its engine pipeline conventions.
+     * Only available in fragment shaders.
+     */
+    public static function flatNormal(p:Vec3):Vec3;
 
     // ============================================================
     // Float helpers

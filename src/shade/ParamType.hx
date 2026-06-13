@@ -18,6 +18,8 @@ enum abstract ParamType(Int) {
 
     var Sampler2D;
 
+    var SamplerCube;
+
     /**
      * Returns a string representation of this enum value.
      */
@@ -31,6 +33,7 @@ enum abstract ParamType(Int) {
             case Mat3: 'Mat3';
             case Mat4: 'Mat4';
             case Sampler2D: 'Sampler2D';
+            case SamplerCube: 'SamplerCube';
         }
     }
 
@@ -44,6 +47,7 @@ enum abstract ParamType(Int) {
             case 'Mat3': Mat3;
             case 'Mat4': Mat4;
             case 'Sampler2D': Sampler2D;
+            case 'SamplerCube': SamplerCube;
             default: null;
         }
     }
