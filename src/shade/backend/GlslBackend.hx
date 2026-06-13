@@ -254,11 +254,17 @@ class GlslBackend implements Backend {
         printer.writeln("#version 300 es");
         printer.line();
 
+        // 3D (`@:shade3d`) fragments run at full precision: PCF shadows and light
+        // clustering produce artifacts at mediump on mobile GLES. 2D stays mediump.
+        // (On desktop GL and ANGLE this is usually a no-op, but it's correct everywhere.)
+        final is3d = classType.meta.has(':shade3d');
+
         // Precision
         printer.writeln('#ifdef GL_ES');
-        printer.writeln('precision mediump float;');
+        printer.writeln(is3d ? 'precision highp float;' : 'precision mediump float;');
         printer.writeln('#else');
         printer.writeln('#define mediump');
+        printer.writeln('#define highp');
         printer.writeln('#endif');
         printer.line();
 
@@ -310,7 +316,7 @@ class GlslBackend implements Backend {
 
         // Attributes (in)
         // 3D: centroid must match the vertex stage `centroid out` qualifiers.
-        final is3d = classType.meta.has(':shade3d');
+        // (`is3d` is computed above, at the precision block.)
         var numIns = 0;
         for (varField in varFields) {
             final field = varField.field;
