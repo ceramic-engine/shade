@@ -12,6 +12,7 @@ This project is primarily intended to be used with [Ceramic](https://ceramic-eng
 - [Command Line Interface](#command-line-interface)
 - [Shader Structure](#shader-structure)
 - [Field Annotations](#field-annotations)
+- [Class Annotations](#class-annotations)
 - [Types](#types)
 - [Built-in Functions](#built-in-functions)
 - [Operators](#operators)
@@ -183,6 +184,30 @@ Values computed in vertex shader, interpolated across the triangle, and read in 
 ```
 
 The corresponding `@in` in the fragment shader must have the same name.
+
+## Class Annotations
+
+### `@shade` - Shader Class Options
+
+A single `@shade({ ... })` metadata on a `Vert` or `Frag` class configures how it is compiled:
+
+```haxe
+@shade({ mode: '3d' })
+class Lit_Frag extends Frag { ... }
+
+@shade({ precision: 'highp' })
+class Crt_Frag extends Frag { ... }
+
+@shade({ mode: '3d', precision: 'mediump' })
+class Cheap3d_Frag extends Frag { ... }
+```
+
+| Option | Values | Default | Effect |
+|---|---|---|---|
+| `mode` | `'2d'`, `'3d'` | `'2d'` | `'3d'` enables centroid interpolation of varyings in GLSL, and real vertex semantics (position, normal, tangent...) with the shader's own clip-space position in Unity |
+| `precision` | `'mediump'`, `'highp'` | `'highp'` when `mode` is `'3d'`, `'mediump'` otherwise | The GLSL ES `precision ... float;` qualifier. No effect on Unity |
+
+In Unity, where the vertex and fragment classes are compiled together, `mode: '3d'` applies when either class asks for it. Unknown options or values are compilation errors, and the former `@:shade3d` metadata is no longer accepted.
 
 ## Types
 

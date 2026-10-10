@@ -76,7 +76,7 @@ class UnityBackend implements Backend {
         fragData:ShaderClassData,
         setExtraFile:(filename:OutputPath, content:String) -> Void
     ):Void {
-        final is3d = vertData.classType.meta.has(':shade3d') || fragData.classType.meta.has(':shade3d');
+        final is3d = ShaderUtils.classOptions(vertData.classType).mode == '3d' || ShaderUtils.classOptions(fragData.classType).mode == '3d';
 
         // Variant suffix (`_inst` for the instanced transpile) applies to both
         // the output file name and the internal ShaderLab name.
@@ -100,7 +100,7 @@ class UnityBackend implements Backend {
             multiShader: FRAG
         };
 
-        ctx.is3d = vertData.classType.meta.has(':shade3d') || fragData.classType.meta.has(':shade3d');
+        ctx.is3d = ShaderUtils.classOptions(vertData.classType).mode == '3d' || ShaderUtils.classOptions(fragData.classType).mode == '3d';
 
         // Instanced variant detection (`@instance` vertex inputs, present in
         // the `-D shade_instanced` transpile of shaders that opt in).
@@ -1813,7 +1813,7 @@ class UnityContext {
 
     public var needsFlatNormalHelper:Bool = false;
     /**
-     * 3D mode (classes annotated `@:shade3d`): real vertex semantics
+     * 3D mode (classes annotated `@shade({ mode: '3d' })`): real vertex semantics
      * (POSITION/NORMAL/TEXCOORD0/TANGENT/COLOR), full vertex main() compilation
      * (the shader computes its own clip-space position), bridged render state
      * (ZTest/ZWrite/Cull/Blend driven by material ints), no multi-texture, no

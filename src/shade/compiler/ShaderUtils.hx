@@ -79,6 +79,80 @@ class ShaderUtils {
     }
 
     /**
+     * Options of a shader class, from its `@shade({ ... })` metadata (see `classOptions()`).
+     */
+    public static final CLASS_OPTION_VALUES:Map<String, Array<String>> = [
+        'mode' => ['2d', '3d'],
+        'precision' => ['mediump', 'highp']
+    ];
+
+    static var classOptionsCache:Map<String, ShadeClassOptions> = new Map();
+
+    /**
+     * Read the `@shade({ mode: '2d' | '3d', precision: 'mediump' | 'highp' })` metadata of a
+     * shader class, with defaults applied: `mode` is `'2d'`, and `precision` is `'highp'`
+     * for a 3D class, `'mediump'` otherwise. Anything unexpected in the metadata, and the
+     * former `@:shade3d` / `@:shadehighp` metadata, is a compilation error at its position.
+     */
+    public static function classOptions(classType:ClassType):ShadeClassOptions {
+        final key = classType.pack.concat([classType.name]).join('.');
+        final cached = classOptionsCache.get(key);
+        if (cached != null) return cached;
+
+        final meta = classType.meta;
+        for (legacy => replacement in [':shade3d' => "@shade({ mode: '3d' })", ':shadehighp' => "@shade({ precision: 'highp' })"]) {
+            if (meta.has(legacy)) {
+                final entry = meta.extract(legacy)[0];
+                haxe.macro.Context.error('@' + legacy + ' is not supported anymore, use ' + replacement, entry.pos);
+            }
+        }
+
+        var mode:String = null;
+        var precision:String = null;
+
+        final entries = meta.extract('shade');
+        if (entries.length > 1) {
+            haxe.macro.Context.error('Only one @shade({ ... }) metadata is allowed per class', entries[1].pos);
+        }
+        if (entries.length == 1) {
+            final entry = entries[0];
+            if (entry.params == null || entry.params.length != 1) {
+                haxe.macro.Context.error('@shade expects a single object literal: @shade({ mode: \'3d\', precision: \'highp\' })', entry.pos);
+            }
+            switch entry.params[0].expr {
+                case EObjectDecl(fields):
+                    for (field in fields) {
+                        final allowed = CLASS_OPTION_VALUES.get(field.field);
+                        if (allowed == null) {
+                            haxe.macro.Context.error('Unknown @shade option "' + field.field + '", expected one of: ' + [for (k in CLASS_OPTION_VALUES.keys()) k].join(', '), field.expr.pos);
+                        }
+                        final value = switch field.expr.expr {
+                            case EConst(CString(v, _)): v;
+                            case _: null;
+                        }
+                        if (value == null || allowed.indexOf(value) == -1) {
+                            haxe.macro.Context.error('@shade option "' + field.field + '" expects one of: ' + [for (v in allowed) "'" + v + "'"].join(', '), field.expr.pos);
+                        }
+                        switch field.field {
+                            case 'mode': mode = value;
+                            case 'precision': precision = value;
+                            case _:
+                        }
+                    }
+                case _:
+                    haxe.macro.Context.error('@shade expects an object literal: @shade({ mode: \'3d\', precision: \'highp\' })', entry.params[0].pos);
+            }
+        }
+
+        if (mode == null) mode = '2d';
+        if (precision == null) precision = mode == '3d' ? 'highp' : 'mediump';
+
+        final options:ShadeClassOptions = { mode: mode, precision: precision };
+        classOptionsCache.set(key, options);
+        return options;
+    }
+
+    /**
      * Returns operator precedence (higher number = higher precedence).
      */
     public static function getOperatorPrecedence(op:Binop):Int {
@@ -337,6 +411,16 @@ class ShaderUtils {
             case _: false;
         }
     }
+}
+
+/**
+ * Options of a shader class, read from `@shade({ ... })` by `ShaderUtils.classOptions()`.
+ */
+typedef ShadeClassOptions = {
+    /** `'2d'` or `'3d'` */
+    final mode:String;
+    /** `'mediump'` or `'highp'`, the GLSL ES float precision */
+    final precision:String;
 }
 
 #end

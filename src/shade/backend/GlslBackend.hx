@@ -123,7 +123,7 @@ class GlslBackend implements Backend {
         // 3D: centroid interpolation keeps varyings inside the covered region of the
         // triangle with MSAA, so silhouette pixels never shade with extrapolated
         // normals/positions (specular/fresnel artifacts).
-        final is3d = classType.meta.has(':shade3d');
+        final is3d = ShaderUtils.classOptions(classType).mode == '3d';
         var numOuts = 0;
         for (varField in varFields) {
             final field = varField.field;
@@ -254,14 +254,17 @@ class GlslBackend implements Backend {
         printer.writeln("#version 300 es");
         printer.line();
 
-        // 3D (`@:shade3d`) fragments run at full precision: PCF shadows and light
-        // clustering produce artifacts at mediump on mobile GLES. 2D stays mediump.
+        // 3D (`@shade({ mode: '3d' })`) fragments run at full precision: PCF shadows and
+        // light clustering produce artifacts at mediump on mobile GLES. 2D stays mediump,
+        // unless the class asks for `@shade({ precision: 'highp' })` (screen-space patterns
+        // computed from pixel coordinates in the thousands need more than a 10 bit mantissa).
         // (On desktop GL and ANGLE this is usually a no-op, but it's correct everywhere.)
-        final is3d = classType.meta.has(':shade3d');
+        final options = ShaderUtils.classOptions(classType);
+        final is3d = options.mode == '3d';
 
         // Precision
         printer.writeln('#ifdef GL_ES');
-        printer.writeln(is3d ? 'precision highp float;' : 'precision mediump float;');
+        printer.writeln(options.precision == 'highp' ? 'precision highp float;' : 'precision mediump float;');
         printer.writeln('#else');
         printer.writeln('#define mediump');
         printer.writeln('#define highp');
