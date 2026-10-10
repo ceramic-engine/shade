@@ -1567,14 +1567,14 @@ class UnityBackend implements Backend {
                     return;
                 }
 
-                final needsParensLeft = needsParenthesesForPrecedence(el[0], op);
+                final needsParensLeft = ShaderUtils.operandNeedsParens(el[0], op, false);
                 if (needsParensLeft)
                     printer.write('(');
                 printExpression(printer, el[0], ctx);
                 if (needsParensLeft)
                     printer.write(')');
                 printer.write(getBinopString(op));
-                final needsParensRight = needsParenthesesForPrecedence(el[1], op);
+                final needsParensRight = ShaderUtils.operandNeedsParens(el[1], op, true);
                 if (needsParensRight)
                     printer.write('(');
                 printExpression(printer, el[1], ctx);
@@ -1599,45 +1599,15 @@ class UnityBackend implements Backend {
                         printer.write('...');
                 }
                 if (!postFix) {
+                    final needsParens = ShaderUtils.unaryOperandNeedsParens(el[0]);
+                    if (needsParens)
+                        printer.write('(');
                     printExpression(printer, el[0], ctx);
+                    if (needsParens)
+                        printer.write(')');
                 }
             case _:
         }
-    }
-
-    function needsParenthesesForPrecedence(expr:TypedExpr, outerOp:Binop):Bool {
-        switch expr.expr {
-            case TCall(e, el):
-                switch e.expr {
-                    case TField(_, fa):
-                        switch fa {
-                            case FStatic(c, cf):
-                                final fieldName = cf.get().name;
-                                var resolvedField = null;
-                                for (f in c.get().statics.get()) {
-                                    if (f.name == fieldName) {
-                                        resolvedField = f;
-                                        break;
-                                    }
-                                }
-                                if (resolvedField != null && resolvedField.meta.has(':op')) {
-                                    for (meta in resolvedField.meta.get()) {
-                                        if (meta.name == ':op') {
-                                            switch meta.params[0].expr {
-                                                case EBinop(innerOp, _, _):
-                                                    return ShaderUtils.getOperatorPrecedence(innerOp) < ShaderUtils.getOperatorPrecedence(outerOp);
-                                                case _:
-                                            }
-                                        }
-                                    }
-                                }
-                            case _:
-                        }
-                    case _:
-                }
-            case _:
-        }
-        return false;
     }
 
     function getBinopString(op:Binop):String {

@@ -244,6 +244,81 @@ class ShaderUtils {
     }
 
     /**
+     * The binary operator `expr` prints as when it is emitted infix: a raw `TBinop`, or a
+     * call to an abstract `@:op(A op B)` overload. `null` for anything else.
+     */
+    public static function infixBinop(expr:TypedExpr):Null<Binop> {
+        return switch expr.expr {
+            case TBinop(op, _, _): op;
+            case TCall(callee, _): abstractOpBinop(callee);
+            case _: null;
+        }
+    }
+
+    /**
+     * The binary operator of an abstract `@:op(A op B)` overload call, or `null` when
+     * `callee` is not one (unary overloads included).
+     */
+    public static function abstractOpBinop(callee:TypedExpr):Null<Binop> {
+        switch callee.expr {
+            case TField(_, FStatic(c, cf)):
+                final fieldName = cf.get().name;
+                for (f in c.get().statics.get()) {
+                    if (f.name == fieldName) {
+                        for (meta in f.meta.get()) {
+                            if (meta.name == ':op') {
+                                switch meta.params[0].expr {
+                                    case EBinop(op, _, _): return op;
+                                    case _:
+                                }
+                            }
+                        }
+                        return null;
+                    }
+                }
+            case _:
+        }
+        return null;
+    }
+
+    /**
+     * Whether `expr`, printed as the left or right operand of `outerOp`, must be wrapped in
+     * parentheses. Haxe drops the parentheses the source had around the arguments of abstract
+     * operator calls, so they are rebuilt from precedence: a lower-precedence infix operand
+     * always needs them, and on the right side an equal-precedence one does too
+     * (`a - (b - c)`, `a / (b * c)`). Ternaries and casts are wrapped as well.
+     */
+    public static function operandNeedsParens(expr:TypedExpr, outerOp:Binop, right:Bool):Bool {
+        final innerOp = infixBinop(expr);
+        if (innerOp != null) {
+            final inner = getOperatorPrecedence(innerOp);
+            final outer = getOperatorPrecedence(outerOp);
+            return inner < outer || (right && inner == outer);
+        }
+        return switch expr.expr {
+            case TIf(_, _, _): true;
+            case TCast(_, _): true;
+            case _: false;
+        }
+    }
+
+    /**
+     * Whether `expr`, printed as the operand of a prefix unary operator, must be wrapped in
+     * parentheses: infix expressions (`-(a - b)`), and unary ones (`-(-x)` must not print
+     * as `--x`).
+     */
+    public static function unaryOperandNeedsParens(expr:TypedExpr):Bool {
+        if (infixBinop(expr) != null) return true;
+        return switch expr.expr {
+            case TUnop(_, _, _): true;
+            case TIf(_, _, _): true;
+            case TCast(_, _): true;
+            case TCall(callee, _): isAbstractOpCall(callee);
+            case _: false;
+        }
+    }
+
+    /**
      * Returns true if expression `e`, when used as the target of a field access / swizzle
      * (`e.field`), must be wrapped in parentheses so the field binds to the whole expression
      * rather than just its right operand, e.g. `(m * v).xyz`, not `m * v.xyz`.

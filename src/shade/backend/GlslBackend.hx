@@ -823,7 +823,7 @@ class GlslBackend implements Backend {
         switch meta.params[0].expr {
             case EBinop(op, e1, e2):
                 // Check if left operand needs parentheses due to lower precedence
-                final needsParensLeft = needsParenthesesForPrecedence(el[0], op);
+                final needsParensLeft = ShaderUtils.operandNeedsParens(el[0], op, false);
                 if (needsParensLeft)
                     printer.write('(');
                 printExpression(printer, el[0], ctx);
@@ -871,7 +871,7 @@ class GlslBackend implements Backend {
                     case OpXor | OpBoolAnd | OpBoolOr | OpShl | OpShr | OpUShr | OpMod | OpInterval | OpArrow | OpIn | OpNullCoal:
                 }
                 // Check if right operand needs parentheses due to lower precedence
-                final needsParensRight = needsParenthesesForPrecedence(el[1], op);
+                final needsParensRight = ShaderUtils.operandNeedsParens(el[1], op, true);
                 if (needsParensRight)
                     printer.write('(');
                 printExpression(printer, el[1], ctx);
@@ -896,48 +896,15 @@ class GlslBackend implements Backend {
                         printer.write('...');
                 }
                 if (!postFix) {
+                    final needsParens = ShaderUtils.unaryOperandNeedsParens(el[0]);
+                    if (needsParens)
+                        printer.write('(');
                     printExpression(printer, el[0], ctx);
+                    if (needsParens)
+                        printer.write(')');
                 }
             case _:
         }
-    }
-
-    /** Check if an expression needs parentheses when used as operand of outerOp */
-    function needsParenthesesForPrecedence(expr:TypedExpr, outerOp:Binop):Bool {
-        // Check if the expression is itself an abstract operator call with lower precedence
-        switch expr.expr {
-            case TCall(e, el):
-                switch e.expr {
-                    case TField(_, fa):
-                        switch fa {
-                            case FStatic(c, cf):
-                                final fieldName = cf.get().name;
-                                var resolvedField = null;
-                                for (f in c.get().statics.get()) {
-                                    if (f.name == fieldName) {
-                                        resolvedField = f;
-                                        break;
-                                    }
-                                }
-                                if (resolvedField != null && resolvedField.meta.has(':op')) {
-                                    for (meta in resolvedField.meta.get()) {
-                                        if (meta.name == ':op') {
-                                            switch meta.params[0].expr {
-                                                case EBinop(innerOp, _, _):
-                                                    // Need parens if inner op has lower precedence than outer
-                                                    return ShaderUtils.getOperatorPrecedence(innerOp) < ShaderUtils.getOperatorPrecedence(outerOp);
-                                                case _:
-                                            }
-                                        }
-                                    }
-                                }
-                            case _:
-                        }
-                    case _:
-                }
-            case _:
-        }
-        return false;
     }
 
     function compileGlslType(type:Type):String {
