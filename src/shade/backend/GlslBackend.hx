@@ -254,10 +254,11 @@ class GlslBackend implements Backend {
         printer.writeln("#version 300 es");
         printer.line();
 
-        // 3D (`@shade({ mode: '3d' })`) fragments run at full precision: PCF shadows and
-        // light clustering produce artifacts at mediump on mobile GLES. 2D stays mediump,
-        // unless the class asks for `@shade({ precision: 'highp' })` (screen-space patterns
-        // computed from pixel coordinates in the thousands need more than a 10 bit mantissa).
+        // Fragments run at full precision unless the class asks for
+        // `@shade({ precision: 'mediump' })`. Medium precision is a 10 bit mantissa on mobile
+        // GPUs: texture coordinates on large atlases, pixel coordinates, times since start
+        // and hashes all lose precision there, and PCF shadows and light clustering produce
+        // artifacts. GLSL ES 3.0 guarantees highp in fragment shaders.
         // (On desktop GL and ANGLE this is usually a no-op, but it's correct everywhere.)
         final options = ShaderUtils.classOptions(classType);
         final is3d = options.mode == '3d';

@@ -195,8 +195,8 @@ A single `@shade({ ... })` metadata on a `Vert` or `Frag` class configures how i
 @shade({ mode: '3d' })
 class Lit_Frag extends Frag { ... }
 
-@shade({ precision: 'highp' })
-class Crt_Frag extends Frag { ... }
+@shade({ precision: 'mediump' })
+class Cheap_Frag extends Frag { ... }
 
 @shade({ mode: '3d', precision: 'mediump' })
 class Cheap3d_Frag extends Frag { ... }
@@ -205,7 +205,7 @@ class Cheap3d_Frag extends Frag { ... }
 | Option | Values | Default | Effect |
 |---|---|---|---|
 | `mode` | `'2d'`, `'3d'` | `'2d'` | `'3d'` enables centroid interpolation of varyings in GLSL, and real vertex semantics (position, normal, tangent...) with the shader's own clip-space position in Unity |
-| `precision` | `'mediump'`, `'highp'` | `'highp'` when `mode` is `'3d'`, `'mediump'` otherwise | The GLSL ES `precision ... float;` qualifier. No effect on Unity |
+| `precision` | `'mediump'`, `'highp'` | `'highp'` | The GLSL ES `precision ... float;` qualifier of the fragment shader. `'mediump'` can be faster on mobile GPUs, but its 10 bit mantissa breaks texture coordinates on large atlases, pixel coordinates, times and hashes. No effect on Unity |
 
 In Unity, where the vertex and fragment classes are compiled together, `mode: '3d'` applies when either class asks for it. Unknown options or values are compilation errors, and the former `@:shade3d` metadata is no longer accepted.
 
@@ -646,9 +646,10 @@ class Textured_Frag extends Frag {
 #version 300 es
 
 #ifdef GL_ES
-precision mediump float;
+precision highp float;
 #else
 #define mediump
+#define highp
 #endif
 
 uniform sampler2D mainTex;

@@ -91,7 +91,7 @@ class ShaderUtils {
     /**
      * Read the `@shade({ mode: '2d' | '3d', precision: 'mediump' | 'highp' })` metadata of a
      * shader class, with defaults applied: `mode` is `'2d'`, and `precision` is `'highp'`
-     * for a 3D class, `'mediump'` otherwise. Anything unexpected in the metadata, and the
+     * (`'mediump'` only when asked for). Anything unexpected in the metadata, and the
      * former `@:shade3d` / `@:shadehighp` metadata, is a compilation error at its position.
      */
     public static function classOptions(classType:ClassType):ShadeClassOptions {
@@ -145,7 +145,7 @@ class ShaderUtils {
         }
 
         if (mode == null) mode = '2d';
-        if (precision == null) precision = mode == '3d' ? 'highp' : 'mediump';
+        if (precision == null) precision = 'highp';
 
         final options:ShadeClassOptions = { mode: mode, precision: precision };
         classOptionsCache.set(key, options);
