@@ -296,6 +296,9 @@ class UnityBackend implements Backend {
             writeVertexUniforms3D(printer, vertData, ctx);
             printer.line();
         }
+        else if (writeVertexUniforms2D(printer, vertData, ctx)) {
+            printer.line();
+        }
 
         // Instanced variant: non-matrix `@instance` inputs (tint, ...) are
         // Unity instanced properties, filled per chunk by the 3D backend
@@ -510,11 +513,14 @@ class UnityBackend implements Backend {
         printer.writeln('_DstBlendAlpha ("Dst Alpha", Float) = 0');
         printer.writeln('_StencilComp ("Stencil Comp", Float) = 8');
 
-        // Custom uniforms from fragment shader (excluding Sampler2D types which are handled above)
+        // Custom uniforms from both stages (excluding Sampler2D types which are handled above)
         // Note: Matrices are not declared in Properties block - they are passed via SetMatrix/SetFloatArray
-        for (varField in fragData.varFields) {
+        final listed = new Map<String, Bool>();
+        for (varField in vertData.varFields.concat(fragData.varFields)) {
             final field = varField.field;
             if (field.meta.has('param') && !field.meta.has('multi') && !ShaderUtils.isSamplerType(field.type)) {
+                if (listed.exists(field.name)) continue;
+                listed.set(field.name, true);
                 // Skip matrix types - they can't be in Properties block
                 if (ShaderUtils.isMatrixType(field.type)) {
                     continue;
@@ -940,6 +946,25 @@ class UnityBackend implements Backend {
                 ctx.declaredUniforms.set(field.name, true);
             }
         }
+    }
+
+    /**
+     * 2D mode: declare the vertex stage's scalar and vector `@param` uniforms (a time,
+     * a size...), before the vertex function. Its matrices are not: the position goes
+     * through `UnityObjectToClipPos`. Samplers in the vertex stage are not supported.
+     * @return `true` if anything was declared
+     */
+    function writeVertexUniforms2D(printer:Printer, vertData:ShaderClassData, ctx:UnityContext):Bool {
+        var declared = false;
+        for (varField in vertData.varFields) {
+            final field = varField.field;
+            if (field.meta.has('param') && !ShaderUtils.isSamplerType(field.type) && !ShaderUtils.isMatrixType(field.type)) {
+                printer.writeln('${compileHlslType(field.type)} ${field.name}_;');
+                ctx.declaredUniforms.set(field.name, true);
+                declared = true;
+            }
+        }
+        return declared;
     }
 
     function writeFragmentUniforms(printer:Printer, fragData:ShaderClassData, ctx:UnityContext):Void {
