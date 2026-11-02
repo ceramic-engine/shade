@@ -768,6 +768,9 @@ class GlslBackend implements Backend {
                         printer.write('fragColor = ');
                     }
                     printExpression(printer, e, ctx);
+                    // A nested return must also leave main(), not only set the output
+                    // (the caller ends the statement with ';')
+                    printer.write('; return');
                 } else {
                     printer.write('return ');
                     printExpression(printer, e, ctx);
