@@ -10,6 +10,7 @@ import shaders.Outline;
 import shaders.PixelArt;
 import shaders.Textured;
 import shaders.TintBlack;
+import shaders.UnityChecks;
 
 function main() {
     //

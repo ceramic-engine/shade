@@ -681,7 +681,10 @@ class UnityBackend implements Backend {
         // Set up context for vertex shader expression printing
         ctx.multiShader = VERT;
 
-        // Process all assignments from the vertex shader main() function
+        // Compile the statements of the vertex shader main() function: the
+        // @out assignments, and the locals and control flow they depend on
+        // (the returned position is replaced by Unity's vertex position)
+        ctx.vertexOutFields = outFields;
         for (funcField in vertData.funcFields) {
             if (funcField.field.name == 'main') {
                 switch funcField.expr.expr {
@@ -698,19 +701,22 @@ class UnityBackend implements Backend {
                                     }
                                 case _:
                             }
-                            // Process assignments to @out fields
                             if (isOutAssignment(expr, outFields)) {
                                 printVertexExpression(printer, expr, ctx, inFields, outFields);
-                                if (!printer.endsBlock()) {
-                                    printer.endBlock(';');
-                                    printer.line();
-                                }
+                            }
+                            else {
+                                printExpression(printer, expr, ctx);
+                            }
+                            if (!printer.endsBlock()) {
+                                printer.endBlock(';');
+                                printer.line();
                             }
                         }
                     case _:
                 }
             }
         }
+        ctx.vertexOutFields = null;
 
         printer.line();
         printer.writeln('return OUT;');
@@ -1095,9 +1101,13 @@ class UnityBackend implements Backend {
                     printer.write(prefix + field.name);
                     printer.write('(');
 
+                    // The stage input comes first: helpers read the @in
+                    // fields as IN.xxx_ like main() does (call sites pass IN)
+                    printer.write(prefix == 'vert_' ? 'appdata_t IN' : 'v2f IN');
+
                     // Parameters
                     for (i in 0...args.length) {
-                        if (i > 0) printer.write(', ');
+                        printer.write(', ');
                         printer.write(compileHlslType(args[i].t));
                         printer.write(' ');
                         printer.write('${args[i].name}_');
@@ -1296,12 +1306,13 @@ class UnityBackend implements Backend {
                 // Map function names and handle special cases
                 var funcName = getFunctionName(e);
 
-                // Special handling for atan with 2 arguments (swap parameters)
+                // atan with 2 arguments: GLSL `atan(y, x)` is HLSL `atan2(y, x)`
+                // (same argument order)
                 if (funcName == 'atan' && el.length == 2) {
                     printer.write('atan2(');
-                    printExpression(printer, el[1], ctx); // x (second arg in GLSL becomes first in HLSL)
+                    printExpression(printer, el[0], ctx);
                     printer.write(', ');
-                    printExpression(printer, el[0], ctx); // y (first arg in GLSL becomes second in HLSL)
+                    printExpression(printer, el[1], ctx);
                     printer.write(')');
                     return;
                 }
@@ -1435,7 +1446,8 @@ class UnityBackend implements Backend {
                 }
 
                 // Check if it's a helper function that needs prefixing
-                if (ctx.helperFunctions.exists(funcName)) {
+                final isHelper = ctx.helperFunctions.exists(funcName);
+                if (isHelper) {
                     funcName = ctx.helperFunctions.get(funcName);
                 } else {
                     funcName = mapFunctionName(funcName, ctx);
@@ -1443,8 +1455,12 @@ class UnityBackend implements Backend {
 
                 printer.write(funcName);
                 printer.write('(');
+                if (isHelper) {
+                    // Helpers take the stage input first (see writeHelperFunctions)
+                    printer.write('IN');
+                }
                 for (i in 0...el.length) {
-                    if (i > 0) {
+                    if (i > 0 || isHelper) {
                         printer.write(', ');
                     }
                     printExpression(printer, el[i], ctx);
