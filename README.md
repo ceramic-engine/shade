@@ -206,8 +206,11 @@ class Cheap3d_Frag extends Frag { ... }
 |---|---|---|---|
 | `mode` | `'2d'`, `'3d'` | `'2d'` | `'3d'` enables centroid interpolation of varyings in GLSL, and real vertex semantics (position, normal, tangent...) with the shader's own clip-space position in Unity |
 | `precision` | `'mediump'`, `'highp'` | `'highp'` | The GLSL ES `precision ... float;` qualifier of the fragment shader. `'mediump'` can be faster on mobile GPUs, but its 10 bit mantissa breaks texture coordinates on large atlases, pixel coordinates, times and hashes. No effect on Unity |
+| `math` | `'fast'`, `'safe'` | `'fast'` | Unity: `'safe'` compiles the program with `#pragma disable_fastmath` (on Metal: IEEE operations without multiply-add contraction, precise math functions). No effect on GLSL, where the browser or driver decides |
 
-In Unity, where the vertex and fragment classes are compiled together, `mode: '3d'` applies when either class asks for it. Unknown options or values are compilation errors, and the former `@:shade3d` metadata is no longer accepted.
+In Unity, float locals and the results of helper functions are always declared `precise`, so that Unity's HLSL compiler keeps the operations as written (it would otherwise contract multiply-adds across statements and turn divisions by constants into multiplications) and the platform compiler sees the same operations as the GLSL output.
+
+In Unity, where the vertex and fragment classes are compiled together, `mode: '3d'` and `math: 'safe'` apply when either class asks for them. Unknown options or values are compilation errors, and the former `@:shade3d` metadata is no longer accepted.
 
 ## Types
 

@@ -83,15 +83,16 @@ class ShaderUtils {
      */
     public static final CLASS_OPTION_VALUES:Map<String, Array<String>> = [
         'mode' => ['2d', '3d'],
-        'precision' => ['mediump', 'highp']
+        'precision' => ['mediump', 'highp'],
+        'math' => ['fast', 'safe']
     ];
 
     static var classOptionsCache:Map<String, ShadeClassOptions> = new Map();
 
     /**
-     * Read the `@shade({ mode: '2d' | '3d', precision: 'mediump' | 'highp' })` metadata of a
-     * shader class, with defaults applied: `mode` is `'2d'`, and `precision` is `'highp'`
-     * (`'mediump'` only when asked for). Anything unexpected in the metadata, and the
+     * Read the `@shade({ mode: '2d' | '3d', precision: 'mediump' | 'highp', math: 'fast' | 'safe' })`
+     * metadata of a shader class, with defaults applied: `mode` is `'2d'`, `precision` is `'highp'`
+     * (`'mediump'` only when asked for) and `math` is `'fast'`. Anything unexpected in the metadata, and the
      * former `@:shade3d` / `@:shadehighp` metadata, is a compilation error at its position.
      */
     public static function classOptions(classType:ClassType):ShadeClassOptions {
@@ -109,6 +110,7 @@ class ShaderUtils {
 
         var mode:String = null;
         var precision:String = null;
+        var math:String = null;
 
         final entries = meta.extract('shade');
         if (entries.length > 1) {
@@ -136,6 +138,7 @@ class ShaderUtils {
                         switch field.field {
                             case 'mode': mode = value;
                             case 'precision': precision = value;
+                            case 'math': math = value;
                             case _:
                         }
                     }
@@ -146,8 +149,9 @@ class ShaderUtils {
 
         if (mode == null) mode = '2d';
         if (precision == null) precision = 'highp';
+        if (math == null) math = 'fast';
 
-        final options:ShadeClassOptions = { mode: mode, precision: precision };
+        final options:ShadeClassOptions = { mode: mode, precision: precision, math: math };
         classOptionsCache.set(key, options);
         return options;
     }
@@ -421,6 +425,14 @@ typedef ShadeClassOptions = {
     final mode:String;
     /** `'mediump'` or `'highp'`, the GLSL ES float precision */
     final precision:String;
+    /**
+     * `'fast'` (default) or `'safe'`: the float math mode of the platform
+     * compiler where the backend controls it. Unity: `'safe'` adds
+     * `#pragma disable_fastmath` (Metal's safe math: IEEE operations without
+     * contraction, precise math functions). The GLSL backend has no such
+     * control and ignores it.
+     */
+    final math:String;
 }
 
 #end

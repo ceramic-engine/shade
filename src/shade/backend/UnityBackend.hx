@@ -275,6 +275,9 @@ class UnityBackend implements Backend {
 
         printer.writeln('#pragma vertex vert');
         printer.writeln('#pragma fragment frag');
+        if (ShaderUtils.classOptions(vertData.classType).math == 'safe' || ShaderUtils.classOptions(fragData.classType).math == 'safe') {
+            printer.writeln('#pragma disable_fastmath');
+        }
         if (ctx.hasInstanceInputs) {
             printer.writeln('#pragma multi_compile_instancing');
         }
@@ -1096,7 +1099,9 @@ class UnityBackend implements Backend {
                     ctx.helperFunctions.set(field.name, prefix + field.name);
 
                     // Return type
-                    printer.write(compileHlslType(ret));
+                    final retType = compileHlslType(ret);
+                    ctx.helperReturnType = isPreciseType(retType) ? retType : null;
+                    printer.write(retType);
                     printer.write(' ');
                     printer.write(prefix + field.name);
                     printer.write('(');
@@ -1117,6 +1122,7 @@ class UnityBackend implements Backend {
                     // Function body
                     printExpression(printer, ShaderUtils.ensureBlock(funcField.expr), ctx);
                     printer.line();
+                    ctx.helperReturnType = null;
                 case _:
             }
         }
@@ -1492,7 +1498,12 @@ class UnityBackend implements Backend {
                 }
             case TFunction(tfunc):
             case TVar(v, expr):
-                printer.write(compileHlslType(v.t));
+                final varType = compileHlslType(v.t);
+                if (isPreciseType(varType)) {
+                    // See isPreciseType()
+                    printer.write('precise ');
+                }
+                printer.write(varType);
                 printer.write(' ');
                 printer.write('${v.name}_');
                 if (expr != null) {
@@ -1543,8 +1554,19 @@ class UnityBackend implements Backend {
             case TSwitch(e, cases, edef):
             case TTry(e, catches):
             case TReturn(e):
-                printer.write('return ');
-                printExpression(printer, e, ctx);
+                if (e != null && ctx.helperReturnType != null) {
+                    // The returned value of a helper is computed into a
+                    // precise local too (see isPreciseType())
+                    final name = 'shadeReturn' + (ctx.preciseReturnCount++) + '_';
+                    printer.write('{ precise ' + ctx.helperReturnType + ' ' + name + ' = ');
+                    printExpression(printer, e, ctx);
+                    printer.endBlock('; return ' + name + '; }');
+                    printer.line();
+                }
+                else {
+                    printer.write('return ');
+                    printExpression(printer, e, ctx);
+                }
             case TBreak:
                 printer.write('break');
             case TContinue:
@@ -1737,6 +1759,21 @@ class UnityBackend implements Backend {
         }
     }
 
+    /**
+     * Float locals and helper results are declared `precise`: without it, the
+     * HLSL compiler of Unity (FXC) rewrites float arithmetic before the
+     * platform compiler sees it (multiply-add contraction across statements,
+     * `x / c` into `x * (1 / c)`, constants folded across operations, products
+     * of a division recombined), so the same shade code computed different
+     * bits than the GLSL output on the same GPU (one level on antialiased
+     * edges, dithered gradients and dash ends of the GPUI port's goldens).
+     * With `precise` FXC keeps the operations as written and the result is
+     * left to the platform compiler, like the GLSL output.
+     */
+    function isPreciseType(type:String):Bool {
+        return type == 'float' || type == 'float2' || type == 'float3' || type == 'float4';
+    }
+
     function compileHlslType(type:Type):String {
         return switch type {
             case TInst(t, params):
@@ -1888,6 +1925,10 @@ class UnityContext {
     public var outMultiSlot:String = null;
     // Helper function name mapping (original name -> prefixed name)
     public var helperFunctions:Map<String, String> = new Map();
+    /** Return type of the helper being printed when it is a float type (see `isPreciseType()`), else null */
+    public var helperReturnType:String = null;
+    /** Counter of the precise locals that hold helper results */
+    public var preciseReturnCount:Int = 0;
     // Mat2/mat3 uniform field names (for reconstruction in main())
     public var mat2Uniforms:Array<String> = [];
     public var mat3Uniforms:Array<String> = [];
