@@ -939,8 +939,11 @@ class ShadeMacro {
             #end
         }
 
+        // Prefixed so it can't clash with a variable of the shader: for code
+        // completion the fields of the shader are kept next to this one,
+        // and a shader is free to name a variable `params`.
         newFields.push({
-            name: 'params',
+            name: '_shaderParams',
             pos: currentPos,
             access: [AStatic],
             kind: FVar(
