@@ -318,6 +318,10 @@ class UnityBackend implements Backend {
             printer.line();
         }
 
+        // Class-level variables of both stages (globals in GLSL): one program here
+        final declaredGlobals = new Map<String, Bool>();
+        writeGlobals(printer, vertData, declaredGlobals);
+
         // Vertex helper functions (prefixed with vert_)
         writeHelperFunctions(printer, vertData.funcFields, ctx, 'vert_');
 
@@ -328,6 +332,7 @@ class UnityBackend implements Backend {
         // Uniforms (samplers and other uniforms for fragment)
         writeFragmentUniforms(printer, fragData, ctx);
         printer.line();
+        writeGlobals(printer, fragData, declaredGlobals);
 
         // Fragment helper functions (prefixed with frag_)
         writeHelperFunctions(printer, fragData.funcFields, ctx, 'frag_');
@@ -974,6 +979,26 @@ class UnityBackend implements Backend {
             }
         }
         return declared;
+    }
+
+    /**
+     * The plain variables of a shader class: a helper function writes them, another
+     * reads them. They are `static` in HLSL, where a global without it is a uniform.
+     */
+    function writeGlobals(printer:Printer, data:ShaderClassData, declared:Map<String, Bool>):Void {
+        var numGlobals = 0;
+        for (varField in data.varFields) {
+            final field = varField.field;
+            if (field.name != '__meta__' && !field.meta.has('in') && !field.meta.has('out') && !field.meta.has('param') && !field.meta.has('instance')) {
+                if (declared.exists(field.name)) continue;
+                declared.set(field.name, true);
+                numGlobals++;
+                printer.writeln('static ${compileHlslType(field.type)} ${field.name}_;');
+            }
+        }
+        if (numGlobals > 0) {
+            printer.line();
+        }
     }
 
     function writeFragmentUniforms(printer:Printer, fragData:ShaderClassData, ctx:UnityContext):Void {
@@ -1825,6 +1850,7 @@ class UnityBackend implements Backend {
             case 'uint': 'uint';
             case 'float': 'float';
             case 'bool': 'bool';
+            case 'void': 'void';
             case _: name;
         }
     }
